@@ -9,12 +9,15 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"mime"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 const decensor_path_suffix = "/.decensor"
+const bootstrap_css_asset = "60b19e5da6a9234ff9220668a5ec1125c157a268513256188ee80f2d2c8d8d36"
 
 var base = basedir()
 
@@ -60,31 +63,59 @@ func error_asset(asset string) error {
 
 func asset_list_html(assets []string) string {
 	var formatted_assets string
-	formatted_assets = head_html + "<ul>"
+	formatted_assets = head_html(1) + "<table class=\"table\"><thead><th>Asset</th><th>Tags</th></thead><tbody>"
 	for _, asset := range assets {
-		formatted_assets = formatted_assets + "<li><a href='../asset/" + asset + "'>" + asset + "</a>"
+		asset_name := asset
 		filename, err := asset_metadata_filename(asset)
 		if err == nil {
-			formatted_assets = formatted_assets + " (" + filename + ")"
+			asset_name = filename
 		}
-		formatted_assets = formatted_assets + "</li>"
+		formatted_assets += fmt.Sprintf("\n<tr><td><a href=\"../asset/%s\">%s</a></td><td>", asset, asset_name)
+		asset_tags, err := tags_by_asset(asset)
+		for _, tag := range asset_tags {
+			formatted_assets += fmt.Sprintf("<a class=\"btn btn-outline-secondary btn-sm\" role=\"button\" href=\"/tag/%s\">%s</a>", tag, tag)
+		}
+		formatted_assets = formatted_assets + "</td></tr>"
 	}
-	formatted_assets = formatted_assets + "</ul>" + footer_html
+	formatted_assets = formatted_assets + "</tbody></table>" + footer_html
 	return formatted_assets
 }
 
-const head_html = `<html>
+func LinkOffset(negative_offset int) string {
+	/* 0 is "" 1 is ../, 2 is "../../" */
+	link_offset_string := ""
+	for negative_offset != 0 {
+		link_offset_string += "../"
+		negative_offset -= 1
+	}
+	return link_offset_string
+}
+
+// Firefox (maybe other browsers) won't load CSS unless it has that Content-Type
+// set, even if you say type="text/css" in the <link> tag. So we add a .css extension
+// to make sure we serve it as CSS.
+func head_html(link_negative_offset int) string {
+	link_prefix := LinkOffset(link_negative_offset)
+	head_html_string := fmt.Sprintf(`<!doctype html>
+<html lang="en">
 <head>
-<title>decensor</title>
+<link href="%sasset/%s.css" rel="stylesheet" />
+<title>Decensor</title>
 </head>
 <body>
-<h1><a href="..">Decensor</a></h1>
-`
+<div class="container">
+<div class="jumbotron">
+<h1><a href="%s">Decensor</a></h1>
+<p>Checksum-based file tracking and tagging</p>
+</div>`, link_prefix, bootstrap_css_asset, link_prefix)
+	return head_html_string
+}
 
-const footer_html = `</body>
+const footer_html = `</div>
+</body>
 </html>`
 
-const index_html = head_html + `<ul>
+var index_html = head_html(0) + `<ul>
 <li><a href="tags/">Explore tags</a></li>
 <li><a href="assets/">All assets</a></li>
 </ul>` + footer_html
@@ -93,9 +124,30 @@ func web(port string) {
 	http.HandleFunc("/asset/", func(w http.ResponseWriter, r *http.Request) {
 		path_parts := strings.Split(r.URL.Path, "/")
 		asset := path_parts[len(path_parts)-1]
+		split_asset := strings.Split(asset, ".")
+		var extension string
+		switch len(split_asset) {
+		case 2:
+			asset = split_asset[0]
+			extension = split_asset[1]
+		case 1:
+		default:
+			http.Error(w, "Why on earth do you have multiple .'s???", 400)
+			return
+		}
 		if validate_asset(asset) == false {
 			http.Error(w, "asset must be 64 hex characters.", 400)
+			return
 		} else {
+			if extension != "" {
+				// TypeByExtension needs the extension to have the leading "."
+				mime_type := mime.TypeByExtension("." + extension)
+				if mime_type != "" {
+					w.Header().Set("Content-Type", mime_type)
+				} else {
+					log.Print("Unknown mime type??")
+				}
+			}
 			asset_path := assets_dir + "/" + asset
 			http.ServeFile(w, r, asset_path)
 		}
@@ -111,7 +163,7 @@ func web(port string) {
 
 	http.HandleFunc("/tags/", func(w http.ResponseWriter, r *http.Request) {
 		var formatted_tags string
-		formatted_tags = head_html + "<ul>"
+		formatted_tags = head_html(1) + "<ul>"
 		for _, a_tag := range tags() {
 			formatted_tags = formatted_tags + "<li><a href='../tag/" + a_tag + "'>" + a_tag + "</a></li>"
 		}
@@ -127,6 +179,7 @@ func web(port string) {
 		tag := path_parts[len(path_parts)-1]
 		if has_dot(tag) == true {
 			http.Error(w, ".'s not allowed.", 400)
+			return
 		}
 		formatted_assets := asset_list_html(assets_by_tag(tag))
 		_, err := io.WriteString(w, formatted_assets)
@@ -190,6 +243,8 @@ func add(path string) (string, error) {
 			return hash, err
 		}
 	}
+	// In case someone is adding /dir/foo.jpg and not foo.jpg
+	path = filepath.Base(path)
 	add_filename(hash, path)
 	return hash, err
 }
@@ -225,8 +280,9 @@ func asset_filepath_metadata_filename(asset string) string {
 
 func asset_metadata_filename(asset string) (string, error) {
 	path := asset_filepath_metadata_filename(asset)
-	filename, err := ioutil.ReadFile(path)
-	return string(filename), err
+	filename_byte, err := ioutil.ReadFile(path)
+	filename := strings.Trim(string(filename_byte), "\n")
+	return filename, err
 }
 
 func basedir() string {

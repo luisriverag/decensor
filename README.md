@@ -20,12 +20,16 @@ Or: `go get -v github.com/teran-mckinney/decensor`
  * decensor tags
  * decensor web :4444 # Browse to localhost:4444
 
+### Get Bootstrap theme so web mode doesn't look awful
+
+ * curl -O https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css
+ * decensor add bootstrap.min.css
+
 ## TODO
 
 Lots...
 
  * Import/export?
- * Make web interface pretty.
  * Add a bunch of unit tests and functional tests.
 
 ## Consider
