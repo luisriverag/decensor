@@ -73,7 +73,7 @@ func asset_list_html(assets []string) string {
 		formatted_assets += fmt.Sprintf("\n<tr><td><a href=\"../asset/%s\">%s</a></td><td>", asset, asset_name)
 		asset_tags, err := tags_by_asset(asset)
 		for _, tag := range asset_tags {
-			formatted_assets += fmt.Sprintf("<a class=\"btn btn-outline-secondary btn-sm\" role=\"button\" href=\"/tag/%s\">%s</a>", tag, tag)
+			formatted_assets += fmt.Sprintf("<a class=\"btn btn-outline-secondary btn-sm\" role=\"button\" href=\"../tag/%s\">%s</a>", tag, tag)
 		}
 		formatted_assets = formatted_assets + "</td></tr>"
 	}
