@@ -305,14 +305,8 @@ func fatal_error(err error) {
 	}
 }
 
-func fatal_chdir(directory string) {
-	err := os.Chdir(directory)
-	fatal_error(err)
-}
-
 func list_directory(directory string) []string {
-	fatal_chdir(directory)
-	dir_entries, err := ioutil.ReadDir(".")
+	dir_entries, err := ioutil.ReadDir(directory)
 	fatal_error(err)
 	var entries []string
 	for _, f := range dir_entries {

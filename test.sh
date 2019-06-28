@@ -57,6 +57,14 @@ echo Hello\ World\ 3 > "$TEST_SCRAP_DIR"/hello3
 
 ./decensor add_and_tag "$TEST_SCRAP_DIR"/hello3 stuff morethings || fail "Failed to add hello3"
 
+./decensor tags | grep stuff || fail "stuff tag not found."
+
+./decensor validate_assets || fail "Assets should be valid"
+
+echo A >> "$TEST_DECENSOR_DIR"/assets/d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26
+
+./decensor validate_assets && fail "Assets should be invalid"
+
 cleanup
 
 echo Success
