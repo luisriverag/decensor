@@ -197,18 +197,17 @@ func web(port string) {
 	log.Fatal(http.ListenAndServe(port, nil))
 }
 
-func get_hash(path string) string {
+func get_hash(path string) (string, error) {
 	var data []byte
 	var hash_string string
 	var err error
 	data, err = ioutil.ReadFile(path)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return hash_string, err
 	}
 	hash := sha256.Sum256(data)
 	hash_string = hex.EncodeToString(hash[:])
-	return hash_string
+	return hash_string, err
 }
 
 func copy_file(source, destination string) error {
@@ -232,11 +231,19 @@ func copy_file(source, destination string) error {
 func add(path string) (string, error) {
 	var hash string
 	var err error
-	hash = get_hash(path)
-	asset_path := assets_dir + "/" + hash
-	err = os.Link(path, asset_path)
-	/* Use hard links to save space when the file is on the same device. If it's not, copy it. */
+
+	/* This also checks if we can read the source file. */
+	hash, err = get_hash(path)
 	if err != nil {
+		return hash, err
+	}
+	/* Make sure we don't already have the asset. */
+	asset_path := assets_dir + "/" + hash
+	if _, err = os.Stat(asset_path); err == nil {
+		return hash, errors.New("Asset already exists.")
+	}
+	/* Use hard links to save space when the file is on the same device. If it's not, copy it. */
+	if err = os.Link(path, asset_path); err != nil {
 		log.Println("Hard link failed, attempting copy.")
 		err = copy_file(path, asset_path)
 		if err != nil {
@@ -258,18 +265,13 @@ func init_metadata(asset string) error {
 func add_filename(asset string, filename string) error {
 	var err error
 	var path string
-	err = error_asset(asset)
-	if err != nil {
+	if err = error_asset(asset); err != nil {
 		return err
 	}
-	err = init_metadata(asset)
-	if err != nil {
+	if err = init_metadata(asset); err != nil {
 		return err
 	}
 	path = asset_filepath_metadata_filename(asset)
-	if err != nil {
-		return err
-	}
 	err = ioutil.WriteFile(path, []byte(filename+"\n"), 0644)
 	return err
 }
@@ -333,8 +335,8 @@ func assets_by_tag(tag string) []string {
 
 func tags_by_asset(asset string) ([]string, error) {
 	var asset_tags []string
-	err := error_asset(asset)
-	if err != nil {
+	var err error
+	if err = error_asset(asset); err != nil {
 		return asset_tags, err
 	}
 	for _, tag := range tags() {
@@ -349,8 +351,7 @@ func tags_by_asset(asset string) ([]string, error) {
 
 func tag(asset string, tags []string) error {
 	var err error
-	err = error_asset(asset)
-	if err != nil {
+	if err = error_asset(asset); err != nil {
 		return err
 	}
 	for _, tag := range tags {
@@ -358,6 +359,7 @@ func tag(asset string, tags []string) error {
 		_, err = os.Stat(directory)
 		/* Make the tag if it doesn't exist already */
 		if os.IsNotExist(err) {
+			log.Printf("Tag %s does not exist, creating.", tag)
 			err = os.Mkdir(directory, 0755)
 			if err != nil {
 				return err
@@ -373,19 +375,26 @@ func tag(asset string, tags []string) error {
 	return nil
 }
 
-func validate_assets() {
+func validate_assets() error {
+	var hash string
+	var err error
+
 	assets := assets()
 	has_invalid := false
 	for _, asset := range assets {
-		hash := get_hash(assets_dir + "/" + asset)
+		hash, err = get_hash(assets_dir + "/" + asset)
+		if err != nil {
+			return err
+		}
 		if asset != hash {
 			has_invalid = true
-			fmt.Fprintf(os.Stderr, "%s does not match %s\n", hash, asset)
+			log.Printf("%s does not match %s\n", hash, asset)
 		}
 	}
 	if has_invalid == true {
-		os.Exit(1)
+		return errors.New("Not all assets are valid.")
 	}
+	return err
 }
 
 func info(asset string) (string, error) {
@@ -422,19 +431,16 @@ func print_list(list []string) {
 
 func init_folders() error {
 	var err error
-	if err != nil {
+	if err = os.Mkdir(base, 0755); err != nil {
 		return err
 	}
-	if os.Mkdir(base, 0755) != nil {
+	if err = os.Mkdir(assets_dir, 0755); err != nil {
 		return err
 	}
-	if os.Mkdir(assets_dir, 0755) != nil {
+	if err = os.Mkdir(tags_dir, 0755); err != nil {
 		return err
 	}
-	if os.Mkdir(tags_dir, 0755) != nil {
-		return err
-	}
-	if os.Mkdir(metadata_dir, 0755) != nil {
+	if err = os.Mkdir(metadata_dir, 0755); err != nil {
 		return err
 	}
 	return nil
@@ -477,7 +483,10 @@ func main() {
 		web(os.Args[2])
 	case "hash":
 		exactly_arguments(3)
-		fmt.Println(get_hash(os.Args[2]))
+		var hash string
+		hash, err = get_hash(os.Args[2])
+		fatal_error(err)
+		fmt.Println(hash)
 	case "add":
 		exactly_arguments(3)
 		var asset_hash string
@@ -486,7 +495,7 @@ func main() {
 		fmt.Println(asset_hash)
 	case "validate_assets":
 		exactly_arguments(2)
-		validate_assets()
+		fatal_error(validate_assets())
 	case "tags":
 		exactly_arguments(2)
 		print_list(tags())
