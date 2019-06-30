@@ -361,12 +361,21 @@ func tag(asset string, tags []string) error {
 		} else if err != nil {
 			return err
 		}
-		err = ioutil.WriteFile(directory+"/"+asset, []byte(""), 0644)
-		if err != nil {
+		// Check if asset already has this tag.
+		tag_path := directory + "/" + asset
+		_, err = os.Stat(tag_path)
+		if os.IsNotExist(err) {
+			err = ioutil.WriteFile(directory+"/"+asset, []byte(""), 0644)
+			if err != nil {
+				return err
+			}
+		} else if err != nil {
 			return err
+		} else {
+			return errors.New("Asset already has this tag.")
 		}
 	}
-	return nil
+	return err
 }
 
 func validate_assets() error {

@@ -59,6 +59,10 @@ echo Hello\ World\ 3 > "$TEST_SCRAP_DIR"/hello3
 
 ./decensor tags | grep stuff || fail "stuff tag not found."
 
+./decensor tag d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26 justanewtag || fail "Failed to add a tag"
+
+./decensor tag d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26 justanewtag && fail "Should fail to add a tag twice."
+
 ./decensor validate_assets || fail "Assets should be valid"
 
 echo A >> "$TEST_DECENSOR_DIR"/assets/d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26
