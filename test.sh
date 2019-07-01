@@ -71,4 +71,30 @@ echo A >> "$TEST_DECENSOR_DIR"/assets/d2a84f4b8b650937ec8f73cd8be2c74add5a911ba6
 
 cleanup
 
+mkdir "$TEST_SCRAP_DIR"
+echo Hello\ World > "$TEST_SCRAP_DIR"/hello
+
+./decensor init || fail "Second init failed"
+
+./decensor add_and_tag "$TEST_SCRAP_DIR"/hello sametag ragtag || fail "Unable to add Hello World"
+
+./decensor add_and_tag decensor.go sometag sametag || fail "Should be able to add a file after decensor init"
+
+./decensor remove d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26 || fail "Should be able to remove Hello World"
+
+./decensor remove d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26 && fail "Should already be removed."
+
+find "$DECENSOR_DIR"
+
+[ "$(find "$DECENSOR_DIR" | wc -l)" -eq 12 ] || fail "Found more files than expected after remove."
+
+./decensor add "$TEST_SCRAP_DIR"/hello || fail "Unable to add Hello World"
+
+# Test without a metadata dir.
+rm -r "$DECENSOR_DIR"/metadata/d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26/
+
+./decensor remove d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26 || fail "Should be able to remove Hello World, even without a metadata dir"
+
+cleanup
+
 echo Success

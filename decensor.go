@@ -100,6 +100,7 @@ func head_html(link_negative_offset int) string {
 <html lang="en">
 <head>
 <link href="%sasset/%s.css" rel="stylesheet" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Decensor</title>
 </head>
 <body>
@@ -254,6 +255,49 @@ func add(path string) (string, error) {
 	path = filepath.Base(path)
 	add_filename(hash, path)
 	return hash, err
+}
+
+func remove(asset string) error {
+	var err error
+	if err = error_asset(asset); err != nil {
+		return err
+	}
+	asset_path := assets_dir + "/" + asset
+	_, err = os.Stat(asset_path)
+	if os.IsNotExist(err) {
+		return errors.New("Asset does not exist, cannot remove.")
+	}
+	filename, err := asset_metadata_filename(asset)
+	if err != nil {
+		log.Printf("Asset had filename: %s", filename)
+	}
+	tags_for_asset, err := tags_by_asset(asset)
+	if err != nil {
+		return err
+	}
+	for _, tag := range tags_for_asset {
+		if err = os.Remove(tags_dir + "/" + tag + "/" + asset); err != nil {
+			return err
+		} else {
+			log.Printf("Removed from tag %s", tag)
+			if len(assets_by_tag(tag)) == 0 {
+				log.Printf("Tag %s is now empty, consider deleting.", tag)
+			}
+		}
+	}
+	asset_metadata_path := metadata_dir + "/" + asset
+	_, err = os.Stat(asset_metadata_path)
+	log.Print(asset_metadata_path)
+	if err == nil {
+		if err = os.RemoveAll(asset_metadata_path); err != nil {
+			return err
+		}
+	} else {
+		log.Print("No metadata for asset found.")
+	}
+	err = os.Remove(asset_path)
+	// We'll return nil if os.Remove was fine.
+	return err
 }
 
 func init_metadata(asset string) error {
@@ -465,6 +509,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "Command: validate_assets")
 	fmt.Fprintln(os.Stderr, "Command: add <path to file>")
 	fmt.Fprintln(os.Stderr, "Command: add_and_tag <path to file> <tag> <tag> <tag>...")
+	fmt.Fprintln(os.Stderr, "Command: remove <asset>")
 	os.Exit(1)
 }
 
@@ -496,6 +541,9 @@ func main() {
 		asset_hash, err = add(os.Args[2])
 		fatal_error(err)
 		fmt.Println(asset_hash)
+	case "remove":
+		exactly_arguments(3)
+		fatal_error(remove(os.Args[2]))
 	case "validate_assets":
 		exactly_arguments(2)
 		fatal_error(validate_assets())
