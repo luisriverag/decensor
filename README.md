@@ -8,6 +8,10 @@ Fetch the code, then run `go build`
 
 Or: `go get -v github.com/teran-mckinney/decensor`
 
+## Upgrading
+
+If you used Decensor from commit b8dd5ff51fdb6b391556e4534a84f77adb574451 (July 15th, 2019) or earlier, you'll need to run `decensor back_tag_all_assets` before doing any other operations.
+
 ## Usage
 
  * decensor init

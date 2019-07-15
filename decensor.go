@@ -295,7 +295,7 @@ func remove(asset string) error {
 	}
 	filename := asset_metadata_filename(asset)
 	log.Printf("Asset had filename: %s", filename)
-	tags_for_asset, err := tags_by_asset(asset)
+	tags_for_asset, err := forward_tags_by_asset(asset)
 	if err != nil {
 		return err
 	}
@@ -329,8 +329,24 @@ func remove(asset string) error {
 }
 
 func init_metadata(asset string) error {
+	var err error
 	directory := metadata_dir + "/" + asset
-	err := os.Mkdir(directory, 0755)
+	if _, err = os.Stat(directory); err != nil {
+		err = os.Mkdir(directory, 0755)
+	}
+	return err
+}
+
+func init_back_tags(asset string) error {
+	var err error
+	if err = init_metadata(asset); err != nil {
+		return err
+	}
+	// Make tags directory if it doesn't exist already.
+	directory := asset_filepath_metadata_tags(asset)
+	if _, err = os.Stat(directory); err != nil {
+		err = os.Mkdir(directory, 0755)
+	}
 	return err
 }
 
@@ -350,6 +366,10 @@ func add_filename(asset string, filename string) error {
 
 func asset_filepath_metadata_filename(asset string) string {
 	return metadata_dir + "/" + asset + "/filename"
+}
+
+func asset_filepath_metadata_tags(asset string) string {
+	return metadata_dir + "/" + asset + "/tags/"
 }
 
 func asset_metadata_filename(asset string) string {
@@ -382,7 +402,31 @@ func fatal_error(err error) {
 }
 
 func list_directory(directory string) ([]string, error) {
+	return list_directory_sorted(directory)
+}
+
+func list_directory_sorted(directory string) ([]string, error) {
+	// This should be slower because it sorts the output.
+	// The sorting actually does not appear to be very slow at all.
 	dir_entries, err := ioutil.ReadDir(directory)
+	if err != nil {
+		return nil, err
+	}
+	var entries []string
+	for _, f := range dir_entries {
+		entries = append(entries, f.Name())
+	}
+	return entries, nil
+}
+
+func list_directory_unsorted(directory string) ([]string, error) {
+	// This should be faster because there's no sorting.
+	fd, err := os.Open(directory)
+	if err != nil {
+		return nil, err
+	}
+	dir_entries, err := fd.Readdir(-1)
+	fd.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -406,6 +450,10 @@ func assets_by_tag(tag string) ([]string, error) {
 }
 
 func tags_by_asset(asset string) ([]string, error) {
+	return back_tags_by_asset(asset)
+}
+
+func forward_tags_by_asset(asset string) ([]string, error) {
 	var asset_tags []string
 	var err error
 	if err = error_asset(asset); err != nil {
@@ -423,10 +471,48 @@ func tags_by_asset(asset string) ([]string, error) {
 		for _, possible_asset := range tag_assets {
 			if asset == possible_asset {
 				asset_tags = append(asset_tags, tag)
+				break
 			}
 		}
 	}
 	return asset_tags, err
+}
+
+func back_tags_by_asset(asset string) ([]string, error) {
+	return list_directory(asset_filepath_metadata_tags(asset))
+}
+
+func validate_asset_tags_forward_and_back(asset string) error {
+	forward_tags, err := forward_tags_by_asset(asset)
+	if err != nil {
+		return err
+	}
+	back_tags, err := back_tags_by_asset(asset)
+	if err != nil {
+		log.Print(err.Error())
+	}
+	if len(forward_tags) != len(back_tags) {
+		goto return_error
+	}
+	for index, _ := range forward_tags {
+		if forward_tags[index] != back_tags[index] {
+			goto return_error
+		}
+	}
+	return nil
+
+return_error:
+	return errors.New(fmt.Sprintf("%s has tags that do not match", asset))
+}
+
+func back_tag(asset string, tag string) error {
+	var err error
+	if err = init_back_tags(asset); err != nil {
+		return err
+	}
+	path := asset_filepath_metadata_tags(asset) + tag
+	err = ioutil.WriteFile(path, []byte(""), 0644)
+	return err
 }
 
 func tag(asset string, tags []string) error {
@@ -460,6 +546,10 @@ func tag(asset string, tags []string) error {
 		} else {
 			return errors.New("Asset already has this tag.")
 		}
+		// Add back tag to keep things fast.
+		if err = back_tag(asset, tag); err != nil {
+			return err
+		}
 	}
 	return err
 }
@@ -472,19 +562,42 @@ func validate_assets() error {
 	if err != nil {
 		return err
 	}
-	has_invalid := false
 	for _, asset := range assets {
 		hash, err = get_hash(assets_dir + "/" + asset)
 		if err != nil {
 			return err
 		}
 		if asset != hash {
-			has_invalid = true
-			log.Printf("%s does not match %s\n", hash, asset)
+			return errors.New(fmt.Sprintf("%s does not match %s", hash, asset))
+		}
+		if err = validate_asset_tags_forward_and_back(asset); err != nil {
+			return err
 		}
 	}
-	if has_invalid == true {
-		return errors.New("Not all assets are valid.")
+	return err
+}
+
+func back_tag_all_assets() error {
+	// This must be ran before adding any new assets! It's to port legacy systems over.
+	// 2019-07-15 and prior
+	var err error
+	all_assets, err := assets()
+	if err != nil {
+		return err
+	}
+	for _, asset := range all_assets {
+		asset_tags, err := forward_tags_by_asset(asset)
+		if err != nil {
+			log.Printf("Failure in back_tag_all_assets with asset: %s", asset)
+			return err
+		}
+		for _, tag := range asset_tags {
+			err := back_tag(asset, tag)
+			if err != nil {
+				log.Printf("Failure in back_tag_all_assets with asset: %s", asset)
+				return err
+			}
+		}
 	}
 	return err
 }
@@ -538,6 +651,7 @@ func init_folders() error {
 func usage() {
 	fmt.Fprintln(os.Stderr, "Usage: decensor <command> [argument]")
 	fmt.Fprintln(os.Stderr, "Command: init")
+	fmt.Fprintln(os.Stderr, "Command: back_tag_all_assets")
 	fmt.Fprintln(os.Stderr, "Command: basedir")
 	fmt.Fprintln(os.Stderr, "Command: hash <file to hash>")
 	fmt.Fprintln(os.Stderr, "Command: web <port> (Example: :4444)")
@@ -589,6 +703,9 @@ func main() {
 	case "validate_assets":
 		exactly_arguments(2)
 		fatal_error(validate_assets())
+	case "back_tag_all_assets":
+		exactly_arguments(2)
+		fatal_error(back_tag_all_assets())
 	case "tags":
 		exactly_arguments(2)
 		all_tags, err := tags()

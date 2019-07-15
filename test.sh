@@ -68,6 +68,30 @@ echo Hello\ World\ 3 > "$TEST_SCRAP_DIR"/hello3
 
 ./decensor validate_assets || fail "Assets should be valid"
 
+## Remove back tag
+
+rm "$TEST_DECENSOR_DIR"/metadata/d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26/tags/justanewtag
+
+./decensor validate_assets && fail "Assets should be invalid"
+
+touch "$TEST_DECENSOR_DIR"/metadata/d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26/tags/justanewtag
+
+./decensor validate_assets || fail "Assets should be valid"
+
+##
+
+## Remove forward tag
+
+rm "$TEST_DECENSOR_DIR"/tags/justanewtag/d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26
+
+./decensor validate_assets && fail "Assets should be invalid"
+
+touch "$TEST_DECENSOR_DIR"/tags/justanewtag/d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26
+
+./decensor validate_assets || fail "Assets should be valid"
+
+##
+
 echo A >> "$TEST_DECENSOR_DIR"/assets/d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26
 
 ./decensor validate_assets && fail "Assets should be invalid"
@@ -89,7 +113,7 @@ echo Hello\ World > "$TEST_SCRAP_DIR"/hello
 
 find "$DECENSOR_DIR"
 
-[ "$(find "$DECENSOR_DIR" | wc -l)" -eq 12 ] || fail "Found more files than expected after remove."
+[ "$(find "$DECENSOR_DIR" | wc -l)" -eq 15 ] || fail "Found more files than expected after remove."
 
 ./decensor add "$TEST_SCRAP_DIR"/hello || fail "Unable to add Hello World"
 
@@ -128,6 +152,18 @@ echo '# I am Markdown' > "$TEST_SCRAP_DIR/foo.md"
 ./decensor add "$TEST_SCRAP_DIR/foo.md"
 
 curl -I -s --show-error --fail "http://localhost:4999/asset/c8deb6b237964318040fe890deb2d8f6129cc3f3a6311e95d8553ef88791ccf3" | grep text/plain || fail "Invalid content type for Markdown"
+
+./decensor tag c8deb6b237964318040fe890deb2d8f6129cc3f3a6311e95d8553ef88791ccf3 foo || fail "Should be able to tag"
+
+./decensor validate_assets || fail "assets should be valid"
+
+rm -r "$DECENSOR_DIR/metadata/c8deb6b237964318040fe890deb2d8f6129cc3f3a6311e95d8553ef88791ccf3/tags"
+
+./decensor validate_assets && fail "assets should be invalid"
+
+./decensor back_tag_all_assets || fail "should be able to back tag all assets"
+
+./decensor validate_assets || fail "assets should be valid"
 
 ##
 
