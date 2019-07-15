@@ -66,12 +66,15 @@ func asset_list_html(assets []string) string {
 	formatted_assets = head_html(1) + "<table class=\"table\"><thead><th>Asset</th><th>Tags</th></thead><tbody>"
 	for _, asset := range assets {
 		asset_name := asset
-		filename, err := asset_metadata_filename(asset)
-		if err == nil {
+		filename := asset_metadata_filename(asset)
+		if filename != "" {
 			asset_name = filename
 		}
 		formatted_assets += fmt.Sprintf("\n<tr><td><a href=\"../asset/%s\">%s</a></td><td>", asset, asset_name)
 		asset_tags, err := tags_by_asset(asset)
+		if err != nil {
+			log.Print(err)
+		}
 		for _, tag := range asset_tags {
 			formatted_assets += fmt.Sprintf("<a class=\"btn btn-outline-secondary btn-sm\" role=\"button\" href=\"../tag/%s\">%s</a>", tag, tag)
 		}
@@ -91,15 +94,12 @@ func LinkOffset(negative_offset int) string {
 	return link_offset_string
 }
 
-// Firefox (maybe other browsers) won't load CSS unless it has that Content-Type
-// set, even if you say type="text/css" in the <link> tag. So we add a .css extension
-// to make sure we serve it as CSS.
 func head_html(link_negative_offset int) string {
 	link_prefix := LinkOffset(link_negative_offset)
 	head_html_string := fmt.Sprintf(`<!doctype html>
 <html lang="en">
 <head>
-<link href="%sasset/%s.css" rel="stylesheet" />
+<link href="%sasset/%s" rel="stylesheet" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Decensor</title>
 </head>
@@ -121,57 +121,75 @@ var index_html = head_html(0) + `<ul>
 <li><a href="assets/">All assets</a></li>
 </ul>` + footer_html
 
+func asset_mime_type(asset string) string {
+	// Try to get the mime type from the filename if we have a filename.
+	// Not all files, like CSS, can get the mime type from magic bytes.
+	// This does not return a mime type from magic bytes if we don't have
+	// a filename or can't detect it from the extension alone.
+	filename := asset_metadata_filename(asset)
+	extension := filepath.Ext(filename)
+	if extension == ".md" {
+		// Return Markdown as text/plain so the browser previews it
+		// rather than prompting for a download. This may change in
+		// the future.
+		return "text/plain"
+	}
+	mime_type := mime.TypeByExtension(filepath.Ext(filename))
+	return mime_type
+}
+
 func web(port string) {
 	http.HandleFunc("/asset/", func(w http.ResponseWriter, r *http.Request) {
 		path_parts := strings.Split(r.URL.Path, "/")
 		asset := path_parts[len(path_parts)-1]
-		split_asset := strings.Split(asset, ".")
-		var extension string
-		switch len(split_asset) {
-		case 2:
-			asset = split_asset[0]
-			extension = split_asset[1]
-		case 1:
-		default:
-			http.Error(w, "Why on earth do you have multiple .'s???", 400)
+		err := error_asset(asset)
+		if err != nil {
+			log.Print(err.Error())
+			http.Error(w, err.Error(), 400)
 			return
 		}
-		if validate_asset(asset) == false {
-			http.Error(w, "asset must be 64 hex characters.", 400)
-			return
+		mime_type := asset_mime_type(asset)
+		if mime_type != "" {
+			w.Header().Set("Content-Type", mime_type)
 		} else {
-			if extension != "" {
-				// TypeByExtension needs the extension to have the leading "."
-				mime_type := mime.TypeByExtension("." + extension)
-				if mime_type != "" {
-					w.Header().Set("Content-Type", mime_type)
-				} else {
-					log.Print("Unknown mime type??")
-				}
-			}
-			asset_path := assets_dir + "/" + asset
-			http.ServeFile(w, r, asset_path)
+			log.Printf("Unknown mime type for %s", asset)
 		}
+		asset_path := assets_dir + "/" + asset
+		http.ServeFile(w, r, asset_path)
 	})
 
 	http.HandleFunc("/assets/", func(w http.ResponseWriter, r *http.Request) {
-		formatted_assets := asset_list_html(assets())
-		_, err := io.WriteString(w, formatted_assets)
+		all_assets, err := assets()
 		if err != nil {
 			log.Print(err)
+			// We don't need to http.Error because this means the connection was broken.
+			return
+		}
+		formatted_assets := asset_list_html(all_assets)
+		_, err = io.WriteString(w, formatted_assets)
+		if err != nil {
+			log.Print(err)
+			return
 		}
 	})
 
 	http.HandleFunc("/tags/", func(w http.ResponseWriter, r *http.Request) {
 		var formatted_tags string
 		formatted_tags = head_html(1) + "<ul>"
-		for _, a_tag := range tags() {
+		all_tags, err := tags()
+		if err != nil {
+			log.Print(err)
+			http.Error(w, "Cannot return tags, please contact us.", 500)
+			return
+		}
+		for _, a_tag := range all_tags {
 			formatted_tags = formatted_tags + "<li><a href='../tag/" + a_tag + "'>" + a_tag + "</a></li>"
 		}
 		formatted_tags = formatted_tags + "</ul>" + footer_html
-		_, err := io.WriteString(w, formatted_tags)
+		_, err = io.WriteString(w, formatted_tags)
 		if err != nil {
 			log.Print(err)
+			return
 		}
 	})
 
@@ -182,10 +200,17 @@ func web(port string) {
 			http.Error(w, ".'s not allowed.", 400)
 			return
 		}
-		formatted_assets := asset_list_html(assets_by_tag(tag))
-		_, err := io.WriteString(w, formatted_assets)
+		tag_assets, err := assets_by_tag(tag)
 		if err != nil {
 			log.Print(err)
+			http.Error(w, "No such tag found.", 404)
+			return
+		}
+		formatted_assets := asset_list_html(tag_assets)
+		_, err = io.WriteString(w, formatted_assets)
+		if err != nil {
+			log.Print(err)
+			return
 		}
 	})
 
@@ -193,6 +218,7 @@ func web(port string) {
 		_, err := io.WriteString(w, index_html)
 		if err != nil {
 			log.Print(err)
+			return
 		}
 	})
 	log.Fatal(http.ListenAndServe(port, nil))
@@ -267,10 +293,8 @@ func remove(asset string) error {
 	if os.IsNotExist(err) {
 		return errors.New("Asset does not exist, cannot remove.")
 	}
-	filename, err := asset_metadata_filename(asset)
-	if err != nil {
-		log.Printf("Asset had filename: %s", filename)
-	}
+	filename := asset_metadata_filename(asset)
+	log.Printf("Asset had filename: %s", filename)
 	tags_for_asset, err := tags_by_asset(asset)
 	if err != nil {
 		return err
@@ -280,7 +304,11 @@ func remove(asset string) error {
 			return err
 		} else {
 			log.Printf("Removed from tag %s", tag)
-			if len(assets_by_tag(tag)) == 0 {
+			tag_assets, err := assets_by_tag(tag)
+			if err != nil {
+				return err
+			}
+			if len(tag_assets) == 0 {
 				log.Printf("Tag %s is now empty, consider deleting.", tag)
 			}
 		}
@@ -324,11 +352,15 @@ func asset_filepath_metadata_filename(asset string) string {
 	return metadata_dir + "/" + asset + "/filename"
 }
 
-func asset_metadata_filename(asset string) (string, error) {
+func asset_metadata_filename(asset string) string {
 	path := asset_filepath_metadata_filename(asset)
 	filename_byte, err := ioutil.ReadFile(path)
+	if err != nil {
+		log.Print(err.Error())
+		return ""
+	}
 	filename := strings.Trim(string(filename_byte), "\n")
-	return filename, err
+	return filename
 }
 
 func basedir() string {
@@ -349,25 +381,27 @@ func fatal_error(err error) {
 	}
 }
 
-func list_directory(directory string) []string {
+func list_directory(directory string) ([]string, error) {
 	dir_entries, err := ioutil.ReadDir(directory)
-	fatal_error(err)
+	if err != nil {
+		return nil, err
+	}
 	var entries []string
 	for _, f := range dir_entries {
 		entries = append(entries, f.Name())
 	}
-	return entries
+	return entries, nil
 }
 
-func assets() []string {
+func assets() ([]string, error) {
 	return list_directory(assets_dir)
 }
 
-func tags() []string {
+func tags() ([]string, error) {
 	return list_directory(tags_dir)
 }
 
-func assets_by_tag(tag string) []string {
+func assets_by_tag(tag string) ([]string, error) {
 	return list_directory(tags_dir + "/" + tag)
 }
 
@@ -377,8 +411,16 @@ func tags_by_asset(asset string) ([]string, error) {
 	if err = error_asset(asset); err != nil {
 		return asset_tags, err
 	}
-	for _, tag := range tags() {
-		for _, possible_asset := range assets_by_tag(tag) {
+	all_tags, err := tags()
+	if err != nil {
+		return nil, err
+	}
+	for _, tag := range all_tags {
+		tag_assets, err := assets_by_tag(tag)
+		if err != nil {
+			return nil, err
+		}
+		for _, possible_asset := range tag_assets {
 			if asset == possible_asset {
 				asset_tags = append(asset_tags, tag)
 			}
@@ -426,7 +468,10 @@ func validate_assets() error {
 	var hash string
 	var err error
 
-	assets := assets()
+	assets, err := assets()
+	if err != nil {
+		return err
+	}
 	has_invalid := false
 	for _, asset := range assets {
 		hash, err = get_hash(assets_dir + "/" + asset)
@@ -447,14 +492,11 @@ func validate_assets() error {
 func info(asset string) (string, error) {
 	var err error
 	var filename string
-	filename, err = asset_metadata_filename(asset)
-	if err != nil {
-		return filename, err
-	}
+	filename = asset_metadata_filename(asset)
 	var asset_tags []string
 	asset_tags, err = tags_by_asset(asset)
 	if err != nil {
-		return filename, err
+		return "", err
 	}
 	var info_string string
 	info_string = asset + "\nFilename: " + filename + "Tags:\n"
@@ -549,7 +591,9 @@ func main() {
 		fatal_error(validate_assets())
 	case "tags":
 		exactly_arguments(2)
-		print_list(tags())
+		all_tags, err := tags()
+		fatal_error(err)
+		print_list(all_tags)
 	case "tag":
 		if len(os.Args) <= 3 {
 			usage()
@@ -567,10 +611,14 @@ func main() {
 		fmt.Println(asset_hash)
 	case "assets":
 		exactly_arguments(2)
-		print_list(assets())
+		all_assets, err := assets()
+		fatal_error(err)
+		print_list(all_assets)
 	case "assets_by_tag":
 		exactly_arguments(3)
-		print_list(assets_by_tag(os.Args[2]))
+		tag_assets, err := assets_by_tag(os.Args[2])
+		fatal_error(err)
+		print_list(tag_assets)
 	case "tags_by_asset":
 		exactly_arguments(3)
 		var tags []string

@@ -16,8 +16,11 @@ go test
 
 go build
 
+strip -s decensor
+
 cleanup() {
     echo "Cleaning up."
+    kill "$PID" || true
     rm -r "$TEST_DECENSOR_DIR" || true
     rm -r "$TEST_SCRAP_DIR" || true
 }
@@ -94,6 +97,41 @@ find "$DECENSOR_DIR"
 rm -r "$DECENSOR_DIR"/metadata/d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26/
 
 ./decensor remove d2a84f4b8b650937ec8f73cd8be2c74add5a911ba64df27458ed8229da804a26 || fail "Should be able to remove Hello World, even without a metadata dir"
+
+# Web tests.
+
+./decensor web :4999 &
+PID=$!
+
+curl -so /dev/null --show-error --fail "http://localhost:4999/assets/" || fail "404 for assets?"
+
+curl -so /dev/null --show-error --fail "http://localhost:4999/tag/no_tag" && fail "No 404 for no tag?"
+
+curl -so /dev/null --show-error --fail "http://localhost:4999/tags/whatever" || fail "tags/whatever should return /tags/, at least for now"
+
+curl -so /dev/null --show-error --fail "http://localhost:4999/tags/" || fail "404 for tags?"
+
+## Make sure CSS is returned as CSS.
+
+echo 'a:' > "$TEST_SCRAP_DIR/foo.css"
+
+./decensor add "$TEST_SCRAP_DIR/foo.css"
+
+curl -I -s --show-error --fail "http://localhost:4999/asset/81a039d5debf48b9eccf2bbd53aa6140627b3354e95c74a81a5d6317c81581f6" | grep text/css || fail "Invalid content type for CSS"
+
+##
+
+## Make sure Markdown is returned as text so browsers show and don't download (for now)
+
+echo '# I am Markdown' > "$TEST_SCRAP_DIR/foo.md"
+
+./decensor add "$TEST_SCRAP_DIR/foo.md"
+
+curl -I -s --show-error --fail "http://localhost:4999/asset/c8deb6b237964318040fe890deb2d8f6129cc3f3a6311e95d8553ef88791ccf3" | grep text/plain || fail "Invalid content type for Markdown"
+
+##
+
+# All done
 
 cleanup
 
