@@ -225,15 +225,23 @@ func web(port string) {
 }
 
 func get_hash(path string) (string, error) {
-	var data []byte
+	// If we do this all in one chunk, we can easily run out of memory on big files.
+	// Instead, we use io.Copy and hash as we go.
 	var hash_string string
-	var err error
-	data, err = ioutil.ReadFile(path)
+
+	fd, err := os.Open(path)
 	if err != nil {
 		return hash_string, err
 	}
-	hash := sha256.Sum256(data)
-	hash_string = hex.EncodeToString(hash[:])
+	defer fd.Close()
+
+	hash := sha256.New()
+	_, err = io.Copy(hash, fd)
+	if err != nil {
+		return hash_string, err
+	}
+	hash_sum := hash.Sum(nil)
+	hash_string = hex.EncodeToString(hash_sum[:])
 	return hash_string, err
 }
 
