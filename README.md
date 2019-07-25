@@ -20,10 +20,12 @@ If you used Decensor from commit b8dd5ff51fdb6b391556e4534a84f77adb574451 (July 
  * decensor tags
  * decensor web :4444 # Browse to localhost:4444
 
+Also see [decensor.service](decensor.service) for a sample Systemd service file.
+
 ### Get Bootstrap theme so web mode doesn't look awful
 
  * curl -O https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css
- * decensor add bootstrap.min.css # File extension must end in .css to serve Content-Type properly.
+ * decensor add bootstrap.min.css # File extension must end in .css when added for it to work in browsers due to the Content-Type.
 
 ## TODO
 

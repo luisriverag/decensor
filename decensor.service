@@ -1,0 +1,13 @@
+[Unit]
+Description=decensor
+
+[Service]
+Environment=DECENSOR_DIR=/srv/files/decensor
+DynamicUser=yes
+ExecStart=/usr/local/bin/decensor web :4444
+ProtectSystem=strict
+NoNewPrivileges=yes
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
