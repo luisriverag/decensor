@@ -14,6 +14,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/alexcesaro/statsd.v2"
 )
 
 const decensor_path_suffix = "/.decensor"
@@ -139,10 +141,20 @@ func asset_mime_type(asset string) string {
 }
 
 func web(port string) {
+	/* Statsd statistics. This works fine with or without. */
+	s, err := statsd.New(statsd.Prefix("decensor"))
+	if err != nil {
+		log.Print("Decensor connection to statsd failed. This is not a problem unless you want statsd.")
+		// This should be non-fatal.
+		log.Print(err)
+	}
+	defer s.Close()
+
 	http.HandleFunc("/asset/", func(w http.ResponseWriter, r *http.Request) {
+		s.Increment("asset.hit")
 		path_parts := strings.Split(r.URL.Path, "/")
 		asset := path_parts[len(path_parts)-1]
-		err := error_asset(asset)
+		err = error_asset(asset)
 		if err != nil {
 			log.Print(err.Error())
 			http.Error(w, err.Error(), 400)
@@ -159,21 +171,29 @@ func web(port string) {
 	})
 
 	http.HandleFunc("/assets/", func(w http.ResponseWriter, r *http.Request) {
+		s.Increment("assets.hit")
+		assets_time := s.NewTiming()
 		all_assets, err := assets()
 		if err != nil {
 			log.Print(err)
-			// We don't need to http.Error because this means the connection was broken.
+			http.Error(w, "Cannot return assets, please contact us.", 500)
 			return
 		}
+		assets_time.Send("assets.tiime")
+
+		asset_list_html_time := s.NewTiming()
 		formatted_assets := asset_list_html(all_assets)
+		asset_list_html_time.Send("asset_list_html.time")
 		_, err = io.WriteString(w, formatted_assets)
 		if err != nil {
+			// We don't need to http.Error because this means the connection was broken.
 			log.Print(err)
 			return
 		}
 	})
 
 	http.HandleFunc("/tags/", func(w http.ResponseWriter, r *http.Request) {
+		s.Increment("tags.hit")
 		var formatted_tags string
 		formatted_tags = head_html(1) + "<ul>"
 		all_tags, err := tags()
@@ -194,6 +214,7 @@ func web(port string) {
 	})
 
 	http.HandleFunc("/tag/", func(w http.ResponseWriter, r *http.Request) {
+		s.Increment("tag.hit")
 		path_parts := strings.Split(r.URL.Path, "/")
 		tag := path_parts[len(path_parts)-1]
 		if has_dot(tag) == true {
@@ -215,6 +236,7 @@ func web(port string) {
 	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		s.Increment("index.hit")
 		_, err := io.WriteString(w, index_html)
 		if err != nil {
 			log.Print(err)
