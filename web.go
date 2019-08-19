@@ -151,7 +151,7 @@ func web(port string) {
 			http.Error(w, "Cannot return assets, please contact us.", 500)
 			return
 		}
-		assets_time.Send("assets.tiime")
+		assets_time.Send("assets.time")
 
 		asset_list_html_time := s.NewTiming()
 		formatted_assets := asset_list_html(all_assets)
