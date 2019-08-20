@@ -22,11 +22,20 @@ var tags_dir = base + "/tags"
 var assets_dir = base + "/assets"
 var metadata_dir = base + "/metadata"
 
+func isHex(hexString string) bool {
+	for _, character := range hexString {
+		if !strings.Contains("abcdef01234567890", string(character)) {
+			return false
+		}
+	}
+	return true
+}
+
 func validate_asset(asset string) bool {
 	if len(asset) != 64 {
 		return false
 	}
-	if IsHex(asset) == false {
+	if isHex(asset) == false {
 		return false
 	}
 	return true
@@ -196,15 +205,14 @@ func asset_filepath_metadata_tags(asset string) string {
 	return metadata_dir + "/" + asset + "/tags/"
 }
 
-func asset_metadata_filename(asset string) string {
-	path := asset_filepath_metadata_filename(asset)
-	filename_byte, err := ioutil.ReadFile(path)
+func asset_metadata_filename(asset string) (filename string) {
+	filenameByte, err := ioutil.ReadFile(asset_filepath_metadata_filename(asset))
 	if err != nil {
-		log.Print(err.Error())
-		return ""
+		filename = asset
+	} else {
+		filename = strings.Trim(string(filenameByte), "\n")
 	}
-	filename := strings.Trim(string(filename_byte), "\n")
-	return filename
+	return
 }
 
 func basedir() string {
@@ -273,8 +281,10 @@ func assets_by_tag(tag string) ([]string, error) {
 	return list_directory(tags_dir + "/" + tag)
 }
 
-func tags_by_asset(asset string) ([]string, error) {
-	return back_tags_by_asset(asset)
+func tags_by_asset(asset string) (tags []string) {
+	// No real issue if an asset doesn't have tags
+	tags, _ = back_tags_by_asset(asset)
+	return
 }
 
 func forward_tags_by_asset(asset string) ([]string, error) {
@@ -426,21 +436,16 @@ func back_tag_all_assets() error {
 	return err
 }
 
-func info(asset string) (string, error) {
-	var err error
+func info(asset string) (info_string string) {
 	var filename string
 	filename = asset_metadata_filename(asset)
 	var asset_tags []string
-	asset_tags, err = tags_by_asset(asset)
-	if err != nil {
-		return "", err
-	}
-	var info_string string
+	asset_tags = tags_by_asset(asset)
 	info_string = asset + "\nFilename: " + filename + "Tags:\n"
 	for _, tag := range asset_tags {
 		info_string = info_string + "\n" + tag
 	}
-	return info_string, nil
+	return
 }
 
 func init_folders() error {

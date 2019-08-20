@@ -15,15 +15,6 @@ import (
 
 const bootstrap_css_asset = "60b19e5da6a9234ff9220668a5ec1125c157a268513256188ee80f2d2c8d8d36"
 
-func IsHex(hexString string) bool {
-	for _, character := range hexString {
-		if !strings.Contains("abcdef01234567890", string(character)) {
-			return false
-		}
-	}
-	return true
-}
-
 func has_dot(some_string string) bool {
 	for _, character := range some_string {
 		if character == '.' {
@@ -33,30 +24,68 @@ func has_dot(some_string string) bool {
 	return false
 }
 
-func asset_list_html(assets []string) string {
-	var formatted_assets string
-	formatted_assets = head_html(1) + "<table class=\"table\"><thead><th>Asset</th><th>Tags</th></thead><tbody>"
-	for _, asset := range assets {
-		asset_name := asset
-		filename := asset_metadata_filename(asset)
-		if filename != "" {
-			asset_name = filename
+func assetHTML(asset string, filename string, tags []string, activeTag string) (output string) {
+	// If activeTag is permalink, behavior is slightly altered.
+	output = fmt.Sprintf("<div class=\"card card-body\"><h5><a href=\"../asset/%s\">%s</a></h5><div class=\"mb-2\">", asset, filename)
+	for _, tag := range tags {
+		output += "<a class=\"btn btn-outline-secondary btn-sm"
+		if tag == activeTag {
+			output += " active"
 		}
-		formatted_assets += fmt.Sprintf("\n<tr><td><a href=\"../asset/%s\">%s</a></td><td>", asset, asset_name)
-		asset_tags, err := tags_by_asset(asset)
-		if err != nil {
-			log.Print(err)
-		}
-		for _, tag := range asset_tags {
-			formatted_assets += fmt.Sprintf("<a class=\"btn btn-outline-secondary btn-sm\" role=\"button\" href=\"../tag/%s\">%s</a>", tag, tag)
-		}
-		formatted_assets = formatted_assets + "</td></tr>"
+		output += fmt.Sprintf("\" href=\"../tag/%s\">%s</a>", tag, tag)
 	}
-	formatted_assets = formatted_assets + "</tbody></table>" + footer_html
-	return formatted_assets
+	output += "<a class=\"btn btn-outline-danger btn-sm"
+	if activeTag == "permalink" {
+		output += " active"
+	}
+	output += fmt.Sprintf("\" href=\"../info/%s\">Permalink</a>", asset)
+	if activeTag == "permalink" {
+		output += fmt.Sprintf("</div><div class=\"small\">SHA256: <code>%s</code></div></div>\n", asset)
+	} else {
+		output += "</div></div>\n"
+	}
+	return
 }
 
-func LinkOffset(negative_offset int) string {
+func getAsset(asset string) (filename string, tags []string) {
+	if filename = asset_metadata_filename(asset); filename == "" {
+		filename = asset
+	}
+	tags = tags_by_asset(asset)
+	return
+}
+
+func asset_list_html(assets []string, active_tag string) (formatted_assets string) {
+	// Set active_tag to "" if you don't want any tags highlighted.
+	var filename string
+	var tags []string
+	formatted_assets = head_html(1)
+	for _, asset := range assets {
+		filename, tags = getAsset(asset)
+		formatted_assets += assetHTML(asset, filename, tags, active_tag)
+	}
+	formatted_assets += footer_html
+	return
+}
+
+func infoHTML(asset string) (output string) {
+	filename, tags := getAsset(asset)
+	output = head_html(1)
+
+	mimeType := asset_mime_type(asset)
+	if strings.HasPrefix(mimeType, "image/") {
+		output += fmt.Sprintf("<img class=\"img-fluid\" src=\"../asset/%s\"/ alt=\"%s\">", asset, filename)
+	} else if strings.HasPrefix(mimeType, "video/") {
+		output += fmt.Sprintf("<video controls class=\"img-fluid\"><source src=\"../asset/%s\" /></video>", asset)
+	} else if strings.HasPrefix(mimeType, "audio/") {
+		output += fmt.Sprintf("<audio controls><source src=\"../asset/%s\" /></audio>", asset)
+	}
+	output += assetHTML(asset, filename, tags, "permalink")
+	output += footer_html
+	return
+}
+
+func linkOffset(negative_offset int) string {
 	/* 0 is "" 1 is ../, 2 is "../../" */
 	link_offset_string := ""
 	for negative_offset != 0 {
@@ -67,31 +96,38 @@ func LinkOffset(negative_offset int) string {
 }
 
 func head_html(link_negative_offset int) string {
-	link_prefix := LinkOffset(link_negative_offset)
+	link_prefix := linkOffset(link_negative_offset)
 	head_html_string := fmt.Sprintf(`<!doctype html>
 <html lang="en">
 <head>
 <link href="%sasset/%s" rel="stylesheet" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Decensor</title>
 </head>
 <body>
 <div class="container">
-<div class="jumbotron">
+<header>
+<div class="mt-2 mb-2">
 <h1><a href="%s">Decensor</a></h1>
 <p>Checksum-based file tracking and tagging</p>
-</div>`, link_prefix, bootstrap_css_asset, link_prefix)
+<a class="btn btn-outline-primary" href="%sassets/">All Assets</a>
+<a class="btn btn-outline-primary" href="%stags/">All Tags</a>
+</div>
+</header>
+<article>
+`, link_prefix, bootstrap_css_asset, link_prefix, link_prefix, link_prefix)
 	return head_html_string
 }
 
-const footer_html = `</div>
+const footer_html = `</article></div>
 </body>
 </html>`
 
-var index_html = head_html(0) + `<ul>
-<li><a href="tags/">Explore tags</a></li>
-<li><a href="assets/">All assets</a></li>
-</ul>` + footer_html
+var index_html = head_html(0) + `
+<p>
+Decensor is written in <a target="_blank" href="https://golang.org/">Golang</a> and released into the <a target="_blank" href="https://unlicense.org/">public domain</a>. Source code is available on <a target="_blank" href="https://github.com/teran-mckinney/decensor">Github</a>.
+</p>
+` + footer_html
 
 func asset_mime_type(asset string) string {
 	// Try to get the mime type from the filename if we have a filename.
@@ -124,6 +160,7 @@ func web(port string) {
 
 	http.HandleFunc("/asset/", func(w http.ResponseWriter, r *http.Request) {
 		s.Increment("asset.hit")
+		defer s.NewTiming().Send("asset")
 		path_parts := strings.Split(r.URL.Path, "/")
 		asset := path_parts[len(path_parts)-1]
 		err = error_asset(asset)
@@ -144,18 +181,15 @@ func web(port string) {
 
 	http.HandleFunc("/assets/", func(w http.ResponseWriter, r *http.Request) {
 		s.Increment("assets.hit")
-		assets_time := s.NewTiming()
+		defer s.NewTiming().Send("assets")
 		all_assets, err := assets()
 		if err != nil {
 			log.Print(err)
 			http.Error(w, "Cannot return assets, please contact us.", 500)
 			return
 		}
-		assets_time.Send("assets.time")
 
-		asset_list_html_time := s.NewTiming()
-		formatted_assets := asset_list_html(all_assets)
-		asset_list_html_time.Send("asset_list_html.time")
+		formatted_assets := asset_list_html(all_assets, "")
 		_, err = io.WriteString(w, formatted_assets)
 		if err != nil {
 			// We don't need to http.Error because this means the connection was broken.
@@ -166,18 +200,25 @@ func web(port string) {
 
 	http.HandleFunc("/tags/", func(w http.ResponseWriter, r *http.Request) {
 		s.Increment("tags.hit")
+		defer s.NewTiming().Send("tags")
 		var formatted_tags string
-		formatted_tags = head_html(1) + "<ul>"
+		formatted_tags = head_html(1)
 		all_tags, err := tags()
 		if err != nil {
 			log.Print(err)
 			http.Error(w, "Cannot return tags, please contact us.", 500)
 			return
 		}
-		for _, a_tag := range all_tags {
-			formatted_tags = formatted_tags + "<li><a href='../tag/" + a_tag + "'>" + a_tag + "</a></li>"
+		for _, tag := range all_tags {
+			assets, err := assets_by_tag(tag)
+			if err != nil {
+				http.Error(w, "Cannot return tags, please contact us.", 500)
+				return
+			}
+			tag_asset_count := len(assets)
+			formatted_tags += fmt.Sprintf("<div><a class=\"btn btn-outline-secondary\" href=\"../tag/%s\">%s <span class=\"badge badge-dark\">%d</span></a></div>\n", tag, tag, tag_asset_count)
 		}
-		formatted_tags = formatted_tags + "</ul>" + footer_html
+		formatted_tags += footer_html
 		_, err = io.WriteString(w, formatted_tags)
 		if err != nil {
 			log.Print(err)
@@ -187,6 +228,7 @@ func web(port string) {
 
 	http.HandleFunc("/tag/", func(w http.ResponseWriter, r *http.Request) {
 		s.Increment("tag.hit")
+		defer s.NewTiming().Send("tag")
 		path_parts := strings.Split(r.URL.Path, "/")
 		tag := path_parts[len(path_parts)-1]
 		if has_dot(tag) == true {
@@ -199,8 +241,28 @@ func web(port string) {
 			http.Error(w, "No such tag found.", 404)
 			return
 		}
-		formatted_assets := asset_list_html(tag_assets)
+		formatted_assets := asset_list_html(tag_assets, tag)
 		_, err = io.WriteString(w, formatted_assets)
+		if err != nil {
+			log.Print(err)
+			return
+		}
+	})
+
+	http.HandleFunc("/info/", func(w http.ResponseWriter, r *http.Request) {
+		s.Increment("info.hit")
+		defer s.NewTiming().Send("info")
+		path_parts := strings.Split(r.URL.Path, "/")
+		asset := path_parts[len(path_parts)-1]
+		err = error_asset(asset)
+		if err != nil {
+			log.Print(err.Error())
+			http.Error(w, err.Error(), 400)
+			return
+		}
+
+		info_html := infoHTML(asset)
+		_, err = io.WriteString(w, info_html)
 		if err != nil {
 			log.Print(err)
 			return
@@ -209,6 +271,7 @@ func web(port string) {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		s.Increment("index.hit")
+		defer s.NewTiming().Send("index")
 		_, err := io.WriteString(w, index_html)
 		if err != nil {
 			log.Print(err)

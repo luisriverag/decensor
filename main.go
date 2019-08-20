@@ -108,14 +108,12 @@ func main() {
 	case "tags_by_asset":
 		exactly_arguments(3)
 		var tags []string
-		tags, err = tags_by_asset(os.Args[2])
-		fatal_error(err)
+		tags = tags_by_asset(os.Args[2])
 		print_list(tags)
 	case "info":
 		exactly_arguments(3)
 		var infotext string
-		infotext, err = info(os.Args[2])
-		fatal_error(err)
+		infotext = info(os.Args[2])
 		fmt.Println(infotext)
 	default:
 		usage()
