@@ -175,6 +175,9 @@ func web(port string) {
 		} else {
 			log.Printf("Unknown mime type for %s", asset)
 		}
+		if filename := asset_metadata_filename(asset); filename != "" {
+			w.Header().Set("Content-Disposition", "inline; filename=\""+filename+"\"")
+		}
 		asset_path := assets_dir + "/" + asset
 		http.ServeFile(w, r, asset_path)
 	})
