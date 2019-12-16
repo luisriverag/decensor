@@ -35,7 +35,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "Command: add <path to file>")
 	fmt.Fprintln(os.Stderr, "Command: add_and_tag <path to file> <tag> <tag> <tag>...")
 	fmt.Fprintln(os.Stderr, "Command: remove <asset>")
-	os.Exit(1)
+	os.Exit(2)
 }
 
 func main() {

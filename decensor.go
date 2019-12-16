@@ -41,7 +41,7 @@ func validate_asset(asset string) bool {
 	return true
 }
 
-func error_asset(asset string) error {
+func validateAsset(asset string) error {
 	if validate_asset(asset) == false {
 		return errors.New("Assets must be 64 hex characters.")
 	} else {
@@ -118,7 +118,7 @@ func add(path string) (string, error) {
 
 func remove(asset string) error {
 	var err error
-	if err = error_asset(asset); err != nil {
+	if err = validateAsset(asset); err != nil {
 		return err
 	}
 	asset_path := assets_dir + "/" + asset
@@ -186,7 +186,7 @@ func init_back_tags(asset string) error {
 func add_filename(asset string, filename string) error {
 	var err error
 	var path string
-	if err = error_asset(asset); err != nil {
+	if err = validateAsset(asset); err != nil {
 		return err
 	}
 	if err = init_metadata(asset); err != nil {
@@ -290,7 +290,7 @@ func tags_by_asset(asset string) (tags []string) {
 func forward_tags_by_asset(asset string) ([]string, error) {
 	var asset_tags []string
 	var err error
-	if err = error_asset(asset); err != nil {
+	if err = validateAsset(asset); err != nil {
 		return asset_tags, err
 	}
 	all_tags, err := tags()
@@ -351,7 +351,7 @@ func back_tag(asset string, tag string) error {
 
 func tag(asset string, tags []string) error {
 	var err error
-	if err = error_asset(asset); err != nil {
+	if err = validateAsset(asset); err != nil {
 		return err
 	}
 	for _, tag := range tags {
