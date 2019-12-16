@@ -88,6 +88,20 @@ func copy_file(source, destination string) error {
 	return err
 }
 
+func getAssetSize(asset string) (bytes int64, err error) {
+	assetPath := getAssetPath(asset)
+	stat, err := os.Stat(assetPath)
+	if err != nil {
+		return
+	}
+	bytes = stat.Size()
+	return
+}
+
+func getAssetPath(hash string) string {
+	return assets_dir + "/" + hash
+}
+
 func add(path string) (string, error) {
 	var hash string
 	var err error
@@ -98,7 +112,7 @@ func add(path string) (string, error) {
 		return hash, err
 	}
 	/* Make sure we don't already have the asset. */
-	asset_path := assets_dir + "/" + hash
+	asset_path := getAssetPath(hash)
 	if _, err = os.Stat(asset_path); err == nil {
 		return hash, errors.New("Asset already exists.")
 	}

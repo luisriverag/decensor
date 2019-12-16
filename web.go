@@ -26,7 +26,8 @@ func has_dot(some_string string) bool {
 	return false
 }
 
-func assetHTML(asset string, filename string, tags []string, activeTag string) (output string) {
+func assetHTML(asset string, filename string, tags []string, activeTag string) (output string, err error) {
+	var assetSize int64
 	// If activeTag is permalink, behavior is slightly altered.
 	output = fmt.Sprintf("<div class=\"card card-body\"><h5><a href=\"../asset/%s\">%s</a></h5><div class=\"mb-2\">", asset, filename)
 	for _, tag := range tags {
@@ -42,7 +43,11 @@ func assetHTML(asset string, filename string, tags []string, activeTag string) (
 	}
 	output += fmt.Sprintf("\" href=\"../info/%s\">Permalink</a>", asset)
 	if activeTag == "permalink" {
-		output += fmt.Sprintf("</div><div class=\"small\">SHA256: <code>%s</code></div></div>\n", asset)
+		assetSize, err = getAssetSize(asset)
+		if err != nil {
+			return
+		}
+		output += fmt.Sprintf("</div><div class=\"small\">Size: <code>%d</code> bytes</div><div class=\"small\">SHA256: <code>%s</code></div></div>\n", assetSize, asset)
 	} else {
 		output += "</div></div>\n"
 	}
@@ -61,13 +66,18 @@ func asset_list_html(assets []string, active_tag string) (formatted_assets strin
 	// Set active_tag to "" if you don't want any tags highlighted.
 	var filename string
 	var tags []string
+	var html string
 	formatted_assets, err = headHTML(1)
 	if err != nil {
 		return
 	}
 	for _, asset := range assets {
 		filename, tags = getAsset(asset)
-		formatted_assets += assetHTML(asset, filename, tags, active_tag)
+		html, err = assetHTML(asset, filename, tags, active_tag)
+		if err != nil {
+			return
+		}
+		formatted_assets += html
 	}
 	formatted_assets += footer_html
 	return
@@ -88,7 +98,11 @@ func infoHTML(asset string) (output string, err error) {
 	} else if strings.HasPrefix(mimeType, "audio/") {
 		output += fmt.Sprintf("<audio controls><source src=\"../asset/%s\" /></audio>", asset)
 	}
-	output += assetHTML(asset, filename, tags, "permalink")
+	html, err := assetHTML(asset, filename, tags, "permalink")
+	if err != err {
+		return
+	}
+	output += html
 	output += footer_html
 	return
 }
@@ -103,22 +117,38 @@ func linkOffset(negative_offset int) string {
 	return link_offset_string
 }
 
+func countTags() (count int, err error) {
+	tags, err := tags()
+	if err != nil {
+		return
+	}
+	count = len(tags)
+	return
+}
+
+func countAssets() (count int, err error) {
+	assets, err := assets()
+	if err != nil {
+		return
+	}
+	count = len(assets)
+	return
+}
+
 func headHTML(link_negative_offset int) (headHTML string, err error) {
 	linkPrefix := linkOffset(link_negative_offset)
 	tmpl, err := template.New("").Parse(headHTMLTemplate)
 	if err != nil {
 		return
 	}
-	allTags, err := tags()
+	tagCount, err := countTags()
 	if err != nil {
 		return
 	}
-	allAssets, err := assets()
+	assetCount, err := countAssets()
 	if err != nil {
 		return
 	}
-	tagCount := len(allTags)
-	assetCount := len(allAssets)
 	var renderedTemplate bytes.Buffer
 	templateArgs := headHTMLTemplateArgs{LinkPrefix: linkPrefix,
 		CSSAsset:   bootstrapCSSAsset,
@@ -320,6 +350,9 @@ func web(port string) {
 			return
 		}
 	})
+
+	go statsdLoop(s)
+
 	log.Fatal(http.ListenAndServe(port, nil))
 }
 
