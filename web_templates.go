@@ -26,3 +26,21 @@ type headHTMLTemplateArgs struct {
 	AssetCount int
 	TagCount   int
 }
+
+const footer_html = `</article></div>
+</body>
+</html>`
+
+const indexHTMLTemplate = `
+{{.Head}}
+<p>
+Decensor is written in <a target="_blank" href="https://golang.org/">Golang</a> and released into the <a target="_blank" href="asset/{{.LicenseAsset}}">public domain</a>. Source code is available on <a target="_blank" href="https://github.com/teran-mckinney/decensor">Github</a>.
+</p>
+{{.Footer}}
+`
+
+type indexHTMLTemplateArgs struct {
+	Head         string
+	Footer       string
+	LicenseAsset string
+}

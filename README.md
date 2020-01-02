@@ -24,8 +24,12 @@ Also see [decensor.service](decensor.service) for a sample Systemd service file.
 
 ### Get Bootstrap theme so web mode doesn't look awful
 
- * curl -O https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css
- * decensor add bootstrap.min.css # File extension must end in .css when added for it to work in browsers due to the Content-Type.
+ * `curl -O https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css`
+ * `decensor add bootstrap.min.css` (File extension must end in .css when added for it to work in browsers due to the Content-Type.)
+
+### Add LICENSE file so license link on the index works
+
+ * `decensor add LICENSE`
 
 ## TODO
 

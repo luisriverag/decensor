@@ -16,6 +16,7 @@ import (
 )
 
 const bootstrapCSSAsset = "60b19e5da6a9234ff9220668a5ec1125c157a268513256188ee80f2d2c8d8d36"
+const licenseAsset = "88d9b4eb60579c191ec391ca04c16130572d7eedc4a86daa58bf28c6e14c9bcd"
 
 func has_dot(some_string string) bool {
 	for _, character := range some_string {
@@ -154,28 +155,30 @@ func headHTML(link_negative_offset int) (headHTML string, err error) {
 		CSSAsset:   bootstrapCSSAsset,
 		AssetCount: assetCount,
 		TagCount:   tagCount}
-	err = tmpl.Execute(&renderedTemplate, templateArgs)
-	if err != nil {
+	if err = tmpl.Execute(&renderedTemplate, templateArgs); err != nil {
 		return
 	}
 	headHTML = renderedTemplate.String()
 	return
 }
 
-const footer_html = `</article></div>
-</body>
-</html>`
-
 func indexHTML() (output string, err error) {
-	output, err = headHTML(0)
+	head, err := headHTML(0)
 	if err != nil {
 		return
 	}
-	output += `
-<p>
-Decensor is written in <a target="_blank" href="https://golang.org/">Golang</a> and released into the <a target="_blank" href="https://unlicense.org/">public domain</a>. Source code is available on <a target="_blank" href="https://github.com/teran-mckinney/decensor">Github</a>.
-</p>
-` + footer_html
+	tmpl, err := template.New("").Parse(indexHTMLTemplate)
+	if err != nil {
+		return
+	}
+	var renderedTemplate bytes.Buffer
+	templateArgs := indexHTMLTemplateArgs{Head: head,
+		Footer:       footer_html,
+		LicenseAsset: licenseAsset}
+	if err = tmpl.Execute(&renderedTemplate, templateArgs); err != nil {
+		return
+	}
+	output = renderedTemplate.String()
 	return
 }
 
