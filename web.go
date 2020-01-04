@@ -28,30 +28,31 @@ func has_dot(some_string string) bool {
 }
 
 func assetHTML(asset string, filename string, tags []string, activeTag string) (output string, err error) {
-	var assetSize int64
-	// If activeTag is permalink, behavior is slightly altered.
-	output = fmt.Sprintf("<div class=\"card card-body\"><h5><a href=\"../asset/%s\">%s</a></h5><div class=\"mb-2\">", asset, filename)
-	for _, tag := range tags {
-		output += "<a class=\"btn btn-outline-secondary btn-sm"
-		if tag == activeTag {
-			output += " active"
-		}
-		output += fmt.Sprintf("\" href=\"../tag/%s\">%s</a>", tag, tag)
-	}
-	output += "<a class=\"btn btn-outline-danger btn-sm"
+	var size int64
+	var mimeType string
+	// This is a performance optimization, maybe not ideal.
 	if activeTag == "permalink" {
-		output += " active"
-	}
-	output += fmt.Sprintf("\" href=\"../info/%s\">Permalink</a>", asset)
-	if activeTag == "permalink" {
-		assetSize, err = getAssetSize(asset)
+		size, err = getAssetSize(asset)
 		if err != nil {
 			return
 		}
-		output += fmt.Sprintf("</div><div class=\"small\">Size: <code>%d</code> bytes</div><div class=\"small\">SHA256: <code>%s</code></div></div>\n", assetSize, asset)
-	} else {
-		output += "</div></div>\n"
+		mimeType = assetMimeType(asset)
 	}
+	tmpl, err := template.New("").Parse(assetHTMLTemplate)
+	if err != nil {
+		return
+	}
+	var renderedTemplate bytes.Buffer
+	templateArgs := assetHTMLTemplateArgs{Asset: asset,
+		Filename:  filename,
+		Tags:      tags,
+		ActiveTag: activeTag,
+		Size:      size,
+		MimeType:  mimeType}
+	if err = tmpl.Execute(&renderedTemplate, templateArgs); err != nil {
+		return
+	}
+	output = renderedTemplate.String()
 	return
 }
 
@@ -91,7 +92,7 @@ func infoHTML(asset string) (output string, err error) {
 		return
 	}
 
-	mimeType := asset_mime_type(asset)
+	mimeType := assetMimeType(asset)
 	if strings.HasPrefix(mimeType, "image/") {
 		output += fmt.Sprintf("<img class=\"img-fluid\" src=\"../asset/%s\"/ alt=\"%s\">", asset, filename)
 	} else if strings.HasPrefix(mimeType, "video/") {
@@ -182,7 +183,7 @@ func indexHTML() (output string, err error) {
 	return
 }
 
-func asset_mime_type(asset string) string {
+func assetMimeType(asset string) string {
 	// Try to get the mime type from the filename if we have a filename.
 	// Not all files, like CSS, can get the mime type from magic bytes.
 	// This does not return a mime type from magic bytes if we don't have
@@ -222,7 +223,7 @@ func web(port string) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		mime_type := asset_mime_type(asset)
+		mime_type := assetMimeType(asset)
 		if mime_type != "" {
 			w.Header().Set("Content-Type", mime_type)
 		} else {
