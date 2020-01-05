@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"mime"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"text/template"
 
@@ -36,7 +34,7 @@ func assetHTML(asset string, filename string, tags []string, activeTag string) (
 		if err != nil {
 			return
 		}
-		mimeType = assetMimeType(asset)
+		mimeType = getAssetMimeType(asset)
 	}
 	tmpl, err := template.New("").Parse(assetHTMLTemplate)
 	if err != nil {
@@ -64,7 +62,7 @@ func getAsset(asset string) (filename string, tags []string) {
 	return
 }
 
-func asset_list_html(assets []string, active_tag string) (formatted_assets string, err error) {
+func assetListHTML(assets []string, active_tag string) (formatted_assets string, err error) {
 	// Set active_tag to "" if you don't want any tags highlighted.
 	var filename string
 	var tags []string
@@ -92,7 +90,7 @@ func infoHTML(asset string) (output string, err error) {
 		return
 	}
 
-	mimeType := assetMimeType(asset)
+	mimeType := getAssetMimeType(asset)
 	if strings.HasPrefix(mimeType, "image/") {
 		output += fmt.Sprintf("<img class=\"img-fluid\" src=\"../asset/%s\"/ alt=\"%s\">", asset, filename)
 	} else if strings.HasPrefix(mimeType, "video/") {
@@ -183,23 +181,6 @@ func indexHTML() (output string, err error) {
 	return
 }
 
-func assetMimeType(asset string) string {
-	// Try to get the mime type from the filename if we have a filename.
-	// Not all files, like CSS, can get the mime type from magic bytes.
-	// This does not return a mime type from magic bytes if we don't have
-	// a filename or can't detect it from the extension alone.
-	filename := asset_metadata_filename(asset)
-	extension := filepath.Ext(filename)
-	if extension == ".md" {
-		// Return Markdown as text/plain so the browser previews it
-		// rather than prompting for a download. This may change in
-		// the future.
-		return "text/plain"
-	}
-	mime_type := mime.TypeByExtension(filepath.Ext(filename))
-	return mime_type
-}
-
 func web(port string) {
 	/* Statsd statistics. This works fine with or without. */
 	s, err := statsd.New(statsd.Prefix("decensor"))
@@ -223,7 +204,7 @@ func web(port string) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		mime_type := assetMimeType(asset)
+		mime_type := getAssetMimeType(asset)
 		if mime_type != "" {
 			w.Header().Set("Content-Type", mime_type)
 		} else {
@@ -245,7 +226,7 @@ func web(port string) {
 			return
 		}
 
-		formatted_assets, err := asset_list_html(all_assets, "")
+		formatted_assets, err := assetListHTML(all_assets, "")
 		if err != nil {
 			httpHandle500(w, err)
 			return
@@ -304,7 +285,7 @@ func web(port string) {
 			http.Error(w, "No such tag found.", http.StatusNotFound)
 			return
 		}
-		formatted_assets, err := asset_list_html(tag_assets, tag)
+		formatted_assets, err := assetListHTML(tag_assets, tag)
 		if err != nil {
 			httpHandle500(w, err)
 			return
@@ -314,6 +295,18 @@ func web(port string) {
 			log.Print(err)
 			return
 		}
+	})
+
+	http.HandleFunc("/mime/", func(w http.ResponseWriter, r *http.Request) {
+		s.Increment("mime.hit")
+		defer s.NewTiming().Send("mime")
+		httpMimeType(w, r)
+	})
+
+	http.HandleFunc("/mimes/", func(w http.ResponseWriter, r *http.Request) {
+		s.Increment("mimes.hit")
+		defer s.NewTiming().Send("mimes")
+		httpMimeTypes(w, r)
 	})
 
 	http.HandleFunc("/info/", func(w http.ResponseWriter, r *http.Request) {
@@ -343,6 +336,10 @@ func web(port string) {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		s.Increment("index.hit")
 		defer s.NewTiming().Send("index")
+		if r.URL.Path != "/" {
+			http.Error(w, "Decensor endpoint does not exist.", http.StatusNotFound)
+			return
+		}
 		index_html, err := indexHTML()
 		if err != nil {
 			httpHandle500(w, err)
