@@ -96,7 +96,7 @@ func infoHTML(asset string) (output string, err error) {
 	} else if strings.HasPrefix(mimeType, "video/") {
 		output += fmt.Sprintf("<video controls class=\"img-fluid\"><source src=\"../asset/%s\" /></video>", asset)
 	} else if strings.HasPrefix(mimeType, "audio/") {
-		output += fmt.Sprintf("<audio controls><source src=\"../asset/%s\" /></audio>", asset)
+		output += fmt.Sprintf("<audio controls><source src=\"../asset/%s\" /><a target=\"blank\" href=\"../asset/%s\">Download</a></audio>", asset, asset)
 	}
 	html, err := assetHTML(asset, filename, tags, "permalink")
 	if err != err {

@@ -15,7 +15,7 @@ const headHTMLTemplate = `<!doctype html>
 <p>Checksum-based file tracking and tagging</p>
 <a class="btn btn-outline-primary" href="{{.LinkPrefix}}assets/">All Assets <span class="badge badge-dark">{{.AssetCount}}</span></a>
 <a class="btn btn-outline-primary" href="{{.LinkPrefix}}tags/">All Tags <span class="badge badge-dark">{{.TagCount}}</span></a>
-<a class="btn btn-outline-primary" href="{{.LinkPrefix}}mimes/">By File Type</span></a>
+<a class="btn btn-outline-primary" href="{{.LinkPrefix}}mimes/">By File Type</a>
 </div>
 </header>
 <article>
