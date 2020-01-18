@@ -102,10 +102,7 @@ func getAssetPath(hash string) string {
 	return assets_dir + "/" + hash
 }
 
-func add(path string) (string, error) {
-	var hash string
-	var err error
-
+func add(path string) (hash string, err error) {
 	/* This also checks if we can read the source file. */
 	hash, err = get_hash(path)
 	if err != nil {
@@ -126,7 +123,7 @@ func add(path string) (string, error) {
 	}
 	// In case someone is adding /dir/foo.jpg and not foo.jpg
 	path = filepath.Base(path)
-	add_filename(hash, path)
+	err = addFilename(hash, path)
 	return hash, err
 }
 
@@ -197,7 +194,7 @@ func init_back_tags(asset string) error {
 	return err
 }
 
-func add_filename(asset string, filename string) error {
+func addFilename(asset string, filename string) error {
 	var err error
 	var path string
 	if err = validateAsset(asset); err != nil {
