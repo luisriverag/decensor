@@ -5,8 +5,6 @@
 TEST_SCRAP_DIR=test_scrap_dir
 TEST_DECENSOR_DIR=test_decensor_dir
 
-set -eE
-
 shellcheck "$0"
 
 # Before we build...
@@ -20,12 +18,12 @@ strip -s decensor
 
 cleanup() {
     echo "Cleaning up."
-    kill "$PID" || true
+    if [ -n "$PID" ]; then
+        kill "$PID" || true
+    fi
     rm -r "$TEST_DECENSOR_DIR" || true
     rm -r "$TEST_SCRAP_DIR" || true
 }
-
-trap fail $(seq 1 64)
 
 fail() {
     echo "FAIL: $1"
@@ -38,7 +36,7 @@ export DECENSOR_DIR=$TEST_DECENSOR_DIR
 [ -d "$TEST_SCRAP_DIR" ] && fail "$TEST_SCRAP_DIR should not exist."
 [ -d "$TEST_DECENSOR_DIR" ] && fail "$TEST_DECENSOR_DIR should not exist."
 
-./decensor add decensor.go && fail "Should not be able to add a file without decensor init"
+./decensor add decensor.go && fail "Should not be able to add a file without decensor init" 
 ./decensor init || fail "Unable to init"
 ./decensor add decensor.go || fail "Unable to add decensor.go"
 ./decensor add noneexistentfile && fail "Should not be able to add non-existent file."
