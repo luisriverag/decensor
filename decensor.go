@@ -18,9 +18,9 @@ const decensor_path_suffix = "/.decensor"
 
 var base = basedir()
 
-var tags_dir = base + "/tags"
-var assets_dir = base + "/assets"
-var metadata_dir = base + "/metadata"
+var tagsDir = base + "/tags"
+var assetsDir = base + "/assets"
+var metadataDir = base + "/metadata"
 
 func isHex(hexString string) bool {
 	for _, character := range hexString {
@@ -99,7 +99,7 @@ func getAssetSize(asset string) (bytes int64, err error) {
 }
 
 func getAssetPath(hash string) string {
-	return assets_dir + "/" + hash
+	return assetsDir + "/" + hash
 }
 
 func add(path string) (hash string, err error) {
@@ -122,9 +122,11 @@ func add(path string) (hash string, err error) {
 		}
 	}
 	// In case someone is adding /dir/foo.jpg and not foo.jpg
-	path = filepath.Base(path)
-	err = addFilename(hash, path)
-	return hash, err
+	filename := filepath.Base(path)
+	if err = addFilename(hash, filename); err != nil {
+		return
+	}
+	return
 }
 
 func remove(asset string) error {
@@ -132,19 +134,19 @@ func remove(asset string) error {
 	if err = validateAsset(asset); err != nil {
 		return err
 	}
-	asset_path := assets_dir + "/" + asset
+	asset_path := assetsDir + "/" + asset
 	_, err = os.Stat(asset_path)
 	if os.IsNotExist(err) {
 		return errors.New("Asset does not exist, cannot remove.")
 	}
-	filename := asset_metadata_filename(asset)
+	filename := getAssetFilename(asset)
 	log.Printf("Asset had filename: %s", filename)
 	tags_for_asset, err := forward_tags_by_asset(asset)
 	if err != nil {
 		return err
 	}
 	for _, tag := range tags_for_asset {
-		if err = os.Remove(tags_dir + "/" + tag + "/" + asset); err != nil {
+		if err = os.Remove(tagsDir + "/" + tag + "/" + asset); err != nil {
 			return err
 		} else {
 			log.Printf("Removed from tag %s", tag)
@@ -157,7 +159,7 @@ func remove(asset string) error {
 			}
 		}
 	}
-	asset_metadata_path := metadata_dir + "/" + asset
+	asset_metadata_path := metadataDir + "/" + asset
 	_, err = os.Stat(asset_metadata_path)
 	log.Print(asset_metadata_path)
 	if err == nil {
@@ -174,7 +176,7 @@ func remove(asset string) error {
 
 func init_metadata(asset string) error {
 	var err error
-	directory := metadata_dir + "/" + asset
+	directory := metadataDir + "/" + asset
 	if _, err = os.Stat(directory); err != nil {
 		err = os.Mkdir(directory, 0755)
 	}
@@ -187,7 +189,7 @@ func init_back_tags(asset string) error {
 		return err
 	}
 	// Make tags directory if it doesn't exist already.
-	directory := asset_filepath_metadata_tags(asset)
+	directory := getAssetFilePathTags(asset)
 	if _, err = os.Stat(directory); err != nil {
 		err = os.Mkdir(directory, 0755)
 	}
@@ -203,21 +205,21 @@ func addFilename(asset string, filename string) error {
 	if err = init_metadata(asset); err != nil {
 		return err
 	}
-	path = asset_filepath_metadata_filename(asset)
+	path = getAssetFilePathFilename(asset)
 	err = ioutil.WriteFile(path, []byte(filename+"\n"), 0644)
 	return err
 }
 
-func asset_filepath_metadata_filename(asset string) string {
-	return metadata_dir + "/" + asset + "/filename"
+func getAssetFilePathFilename(asset string) string {
+	return metadataDir + "/" + asset + "/filename"
 }
 
-func asset_filepath_metadata_tags(asset string) string {
-	return metadata_dir + "/" + asset + "/tags/"
+func getAssetFilePathTags(asset string) string {
+	return metadataDir + "/" + asset + "/tags/"
 }
 
-func asset_metadata_filename(asset string) (filename string) {
-	filenameByte, err := ioutil.ReadFile(asset_filepath_metadata_filename(asset))
+func getAssetFilename(asset string) (filename string) {
+	filenameByte, err := ioutil.ReadFile(getAssetFilePathFilename(asset))
 	if err != nil {
 		filename = asset
 	} else {
@@ -281,15 +283,15 @@ func list_directory_unsorted(directory string) ([]string, error) {
 }
 
 func assets() ([]string, error) {
-	return list_directory(assets_dir)
+	return list_directory(assetsDir)
 }
 
 func tags() ([]string, error) {
-	return list_directory(tags_dir)
+	return list_directory(tagsDir)
 }
 
 func assets_by_tag(tag string) ([]string, error) {
-	return list_directory(tags_dir + "/" + tag)
+	return list_directory(tagsDir + "/" + tag)
 }
 
 func tags_by_asset(asset string) (tags []string) {
@@ -324,7 +326,7 @@ func forward_tags_by_asset(asset string) ([]string, error) {
 }
 
 func back_tags_by_asset(asset string) ([]string, error) {
-	return list_directory(asset_filepath_metadata_tags(asset))
+	return list_directory(getAssetFilePathTags(asset))
 }
 
 func validate_asset_tags_forward_and_back(asset string) error {
@@ -355,7 +357,7 @@ func back_tag(asset string, tag string) error {
 	if err = init_back_tags(asset); err != nil {
 		return err
 	}
-	path := asset_filepath_metadata_tags(asset) + tag
+	path := getAssetFilePathTags(asset) + tag
 	err = ioutil.WriteFile(path, []byte(""), 0644)
 	return err
 }
@@ -366,7 +368,7 @@ func tag(asset string, tags []string) error {
 		return err
 	}
 	for _, tag := range tags {
-		directory := tags_dir + "/" + tag
+		directory := tagsDir + "/" + tag
 		_, err = os.Stat(directory)
 		/* Make the tag if it doesn't exist already */
 		if os.IsNotExist(err) {
@@ -408,7 +410,7 @@ func validate_assets() error {
 		return err
 	}
 	for _, asset := range assets {
-		hash, err = get_hash(assets_dir + "/" + asset)
+		hash, err = get_hash(assetsDir + "/" + asset)
 		if err != nil {
 			return err
 		}
@@ -449,7 +451,7 @@ func back_tag_all_assets() error {
 
 func info(asset string) (info_string string) {
 	var filename string
-	filename = asset_metadata_filename(asset)
+	filename = getAssetFilename(asset)
 	var asset_tags []string
 	asset_tags = tags_by_asset(asset)
 	info_string = asset + "\nFilename: " + filename + "Tags:\n"
@@ -464,13 +466,13 @@ func init_folders() error {
 	if err = os.Mkdir(base, 0755); err != nil {
 		return err
 	}
-	if err = os.Mkdir(assets_dir, 0755); err != nil {
+	if err = os.Mkdir(assetsDir, 0755); err != nil {
 		return err
 	}
-	if err = os.Mkdir(tags_dir, 0755); err != nil {
+	if err = os.Mkdir(tagsDir, 0755); err != nil {
 		return err
 	}
-	if err = os.Mkdir(metadata_dir, 0755); err != nil {
+	if err = os.Mkdir(metadataDir, 0755); err != nil {
 		return err
 	}
 	return nil

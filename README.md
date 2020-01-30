@@ -33,7 +33,15 @@ Also see [decensor.service](decensor.service) for a sample Systemd service file.
 
 ## TODO
 
- * Import/export?
+### Features
+
+ * Import/export
+ * Markdown rendering on permalink
+ * Version reporting
+
+### Performance
+
+ * Caching
 
 ## Consider
 

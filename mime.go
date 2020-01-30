@@ -11,21 +11,22 @@ import (
 	"strings"
 )
 
-func getAssetMimeType(asset string) string {
+func getAssetMimeType(asset string) (mimeType string) {
 	// Try to get the mime type from the filename if we have a filename.
 	// Not all files, like CSS, can get the mime type from magic bytes.
 	// This does not return a mime type from magic bytes if we don't have
 	// a filename or can't detect it from the extension alone.
-	filename := asset_metadata_filename(asset)
+	filename := getAssetFilename(asset)
 	extension := filepath.Ext(filename)
 	if extension == ".md" {
 		// Return Markdown as text/plain so the browser previews it
 		// rather than prompting for a download. This may change in
 		// the future.
-		return "text/plain"
+		mimeType = "text/plain"
+	} else {
+		mimeType = mime.TypeByExtension(filepath.Ext(filename))
 	}
-	mime_type := mime.TypeByExtension(filepath.Ext(filename))
-	return mime_type
+	return
 }
 
 func getMimeMajor(mime string) string {
@@ -68,8 +69,8 @@ func getMimeTypes() (mimeTypes map[string]uint64, err error) {
 }
 
 func httpMimeType(w http.ResponseWriter, r *http.Request) {
-	path_parts := strings.Split(r.URL.Path, "/")
-	mimeType := path_parts[len(path_parts)-1]
+	pathParts := strings.Split(r.URL.Path, "/")
+	mimeType := pathParts[len(pathParts)-1]
 	mimeAssets, err := getAssetsByMimeTypeMajor(mimeType)
 	if err != nil {
 		httpHandle500(w, err)
@@ -112,7 +113,7 @@ func httpMimeTypes(w http.ResponseWriter, r *http.Request) {
 	for _, key := range keys {
 		output += fmt.Sprintf("<div><a class=\"btn btn-outline-secondary\" href=\"../mime/%s\">%s/* <span class=\"badge badge-dark\">%d</span></a></div>\n", key, key, allMimes[key])
 	}
-	output += footer_html
+	output += footerHTML
 	_, err = io.WriteString(w, output)
 	if err != nil {
 		log.Print(err)

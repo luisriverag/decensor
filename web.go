@@ -54,16 +54,8 @@ func assetHTML(asset string, filename string, tags []string, activeTag string) (
 	return
 }
 
-func getAsset(asset string) (filename string, tags []string) {
-	if filename = asset_metadata_filename(asset); filename == "" {
-		filename = asset
-	}
-	tags = tags_by_asset(asset)
-	return
-}
-
-func assetListHTML(assets []string, active_tag string) (formatted_assets string, err error) {
-	// Set active_tag to "" if you don't want any tags highlighted.
+func assetListHTML(assets []string, activeTag string) (formatted_assets string, err error) {
+	// Set activeTag to "" if you don't want any tags highlighted.
 	var filename string
 	var tags []string
 	var html string
@@ -72,19 +64,21 @@ func assetListHTML(assets []string, active_tag string) (formatted_assets string,
 		return
 	}
 	for _, asset := range assets {
-		filename, tags = getAsset(asset)
-		html, err = assetHTML(asset, filename, tags, active_tag)
+		filename = getAssetFilename(asset)
+		tags = tags_by_asset(asset)
+		html, err = assetHTML(asset, filename, tags, activeTag)
 		if err != nil {
 			return
 		}
 		formatted_assets += html
 	}
-	formatted_assets += footer_html
+	formatted_assets += footerHTML
 	return
 }
 
 func infoHTML(asset string) (output string, err error) {
-	filename, tags := getAsset(asset)
+	filename := getAssetFilename(asset)
+	tags := tags_by_asset(asset)
 	output, err = headHTML(1)
 	if err != nil {
 		return
@@ -103,7 +97,7 @@ func infoHTML(asset string) (output string, err error) {
 		return
 	}
 	output += html
-	output += footer_html
+	output += footerHTML
 	return
 }
 
@@ -172,7 +166,7 @@ func indexHTML() (output string, err error) {
 	}
 	var renderedTemplate bytes.Buffer
 	templateArgs := indexHTMLTemplateArgs{Head: head,
-		Footer:       footer_html,
+		Footer:       footerHTML,
 		LicenseAsset: licenseAsset}
 	if err = tmpl.Execute(&renderedTemplate, templateArgs); err != nil {
 		return
@@ -196,25 +190,21 @@ func web(port string) {
 	http.HandleFunc("/asset/", func(w http.ResponseWriter, r *http.Request) {
 		s.Increment("asset.hit")
 		defer s.NewTiming().Send("asset")
-		path_parts := strings.Split(r.URL.Path, "/")
-		asset := path_parts[len(path_parts)-1]
+		pathParts := strings.Split(r.URL.Path, "/")
+		asset := pathParts[len(pathParts)-1]
 		err = validateAsset(asset)
 		if err != nil {
 			log.Print(err.Error())
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		mime_type := getAssetMimeType(asset)
-		if mime_type != "" {
-			w.Header().Set("Content-Type", mime_type)
-		} else {
-			log.Printf("Unknown mime type for %s", asset)
+		if mimeType := getAssetMimeType(asset); mimeType != "" {
+			w.Header().Set("Content-Type", mimeType)
 		}
-		if filename := asset_metadata_filename(asset); filename != "" {
+		if filename := getAssetFilename(asset); filename != asset {
 			w.Header().Set("Content-Disposition", "inline; filename=\""+filename+"\"")
 		}
-		asset_path := assets_dir + "/" + asset
-		http.ServeFile(w, r, asset_path)
+		http.ServeFile(w, r, getAssetPath(asset))
 	})
 
 	http.HandleFunc("/assets/", func(w http.ResponseWriter, r *http.Request) {
@@ -262,7 +252,7 @@ func web(port string) {
 			tag_asset_count := len(assets)
 			formatted_tags += fmt.Sprintf("<div><a class=\"btn btn-outline-secondary\" href=\"../tag/%s\">%s <span class=\"badge badge-dark\">%d</span></a></div>\n", tag, tag, tag_asset_count)
 		}
-		formatted_tags += footer_html
+		formatted_tags += footerHTML
 		_, err = io.WriteString(w, formatted_tags)
 		if err != nil {
 			log.Print(err)

@@ -5,17 +5,6 @@
 TEST_SCRAP_DIR=test_scrap_dir
 TEST_DECENSOR_DIR=test_decensor_dir
 
-shellcheck "$0"
-
-# Before we build...
-go fmt
-go doc
-go test
-
-go build
-
-strip -s decensor
-
 cleanup() {
     echo "Cleaning up."
     if [ -n "$PID" ]; then
@@ -30,6 +19,17 @@ fail() {
     cleanup
     exit 1
 }
+
+shellcheck "$0" || fail
+
+# Before we build...
+go fmt || fail
+go doc || fail
+go test || fail
+
+go build || fail
+
+strip -s decensor || fail
 
 export DECENSOR_DIR=$TEST_DECENSOR_DIR
 

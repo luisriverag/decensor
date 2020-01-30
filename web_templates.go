@@ -28,7 +28,7 @@ type headHTMLTemplateArgs struct {
 	TagCount   int
 }
 
-const footer_html = `</article></div>
+const footerHTML = `</article></div>
 </body>
 </html>`
 
