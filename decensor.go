@@ -16,11 +16,11 @@ import (
 
 const decensor_path_suffix = "/.decensor"
 
-var base = basedir()
+var baseDir = basedir()
 
-var tagsDir = base + "/tags"
-var assetsDir = base + "/assets"
-var metadataDir = base + "/metadata"
+var tagsDir = baseDir + "/tags"
+var assetsDir = baseDir + "/assets"
+var metadataDir = baseDir + "/metadata"
 
 func isHex(hexString string) bool {
 	for _, character := range hexString {
@@ -459,7 +459,7 @@ func info(asset string) (info_string string) {
 
 func init_folders() error {
 	var err error
-	if err = os.Mkdir(base, 0755); err != nil {
+	if err = os.Mkdir(baseDir, 0755); err != nil {
 		return err
 	}
 	if err = os.Mkdir(assetsDir, 0755); err != nil {
