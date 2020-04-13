@@ -70,7 +70,7 @@ func get_hash(path string) (string, error) {
 	return hash_string, err
 }
 
-func copy_file(source, destination string) error {
+func copyFile(source, destination string) error {
 	source_fp, err := os.Open(source)
 	if err != nil {
 		return err
@@ -113,13 +113,9 @@ func add(path string) (hash string, err error) {
 	if _, err = os.Stat(asset_path); err == nil {
 		return hash, errors.New("Asset already exists.")
 	}
-	/* Use hard links to save space when the file is on the same device. If it's not, copy it. */
-	if err = os.Link(path, asset_path); err != nil {
-		log.Println("Hard link failed, attempting copy.")
-		err = copy_file(path, asset_path)
-		if err != nil {
-			return hash, err
-		}
+	err = copyFile(path, asset_path)
+	if err != nil {
+		return hash, err
 	}
 	// In case someone is adding /dir/foo.jpg and not foo.jpg
 	filename := filepath.Base(path)
