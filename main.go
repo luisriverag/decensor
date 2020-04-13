@@ -50,7 +50,7 @@ func main() {
 		fatal_error(init_folders())
 	case "basedir":
 		exactly_arguments(2)
-		fmt.Println(basedir())
+		fmt.Println(baseDir())
 	case "web":
 		exactly_arguments(3)
 		web(os.Args[2])

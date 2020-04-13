@@ -14,13 +14,9 @@ import (
 	"strings"
 )
 
-const decensor_path_suffix = "/.decensor"
+const decensorPathSuffix = "/.decensor"
 
-var baseDir = basedir()
-
-var tagsDir = baseDir + "/tags"
-var assetsDir = baseDir + "/assets"
-var metadataDir = baseDir + "/metadata"
+var inChroot = false
 
 func isHex(hexString string) bool {
 	for _, character := range hexString {
@@ -99,7 +95,7 @@ func getAssetSize(asset string) (bytes int64, err error) {
 }
 
 func getAssetPath(hash string) string {
-	return assetsDir + "/" + hash
+	return assetsDir() + "/" + hash
 }
 
 func add(path string) (hash string, err error) {
@@ -130,7 +126,7 @@ func remove(asset string) error {
 	if err = validateAsset(asset); err != nil {
 		return err
 	}
-	asset_path := assetsDir + "/" + asset
+	asset_path := assetsDir() + "/" + asset
 	_, err = os.Stat(asset_path)
 	if os.IsNotExist(err) {
 		return errors.New("Asset does not exist, cannot remove.")
@@ -142,7 +138,7 @@ func remove(asset string) error {
 		return err
 	}
 	for _, tag := range tags_for_asset {
-		if err = os.Remove(tagsDir + "/" + tag + "/" + asset); err != nil {
+		if err = os.Remove(tagsDir() + "/" + tag + "/" + asset); err != nil {
 			return err
 		} else {
 			log.Printf("Removed from tag %s", tag)
@@ -155,7 +151,7 @@ func remove(asset string) error {
 			}
 		}
 	}
-	asset_metadata_path := metadataDir + "/" + asset
+	asset_metadata_path := metadataDir() + "/" + asset
 	_, err = os.Stat(asset_metadata_path)
 	log.Print(asset_metadata_path)
 	if err == nil {
@@ -172,7 +168,7 @@ func remove(asset string) error {
 
 func init_metadata(asset string) error {
 	var err error
-	directory := metadataDir + "/" + asset
+	directory := metadataDir() + "/" + asset
 	if _, err = os.Stat(directory); err != nil {
 		err = os.Mkdir(directory, 0755)
 	}
@@ -207,11 +203,11 @@ func addFilename(asset string, filename string) error {
 }
 
 func getAssetFilePathFilename(asset string) string {
-	return metadataDir + "/" + asset + "/filename"
+	return metadataDir() + "/" + asset + "/filename"
 }
 
 func getAssetFilePathTags(asset string) string {
-	return metadataDir + "/" + asset + "/tags/"
+	return metadataDir() + "/" + asset + "/tags/"
 }
 
 func getAssetFilename(asset string) (filename string) {
@@ -224,15 +220,30 @@ func getAssetFilename(asset string) (filename string) {
 	return
 }
 
-func basedir() string {
+func baseDir() string {
+	if inChroot {
+		return ""
+	}
 	environment_path := os.Getenv("DECENSOR_DIR")
 	if environment_path == "" {
 		home, err := os.UserHomeDir()
 		fatal_error(err)
-		return home + decensor_path_suffix
+		return home + decensorPathSuffix
 	} else {
 		return environment_path
 	}
+}
+
+func tagsDir() string {
+	return baseDir() + "/tags"
+}
+
+func metadataDir() string {
+	return baseDir() + "/metadata"
+}
+
+func assetsDir() string {
+	return baseDir() + "/assets"
 }
 
 func fatal_error(err error) {
@@ -279,15 +290,15 @@ func list_directory_unsorted(directory string) ([]string, error) {
 }
 
 func assets() ([]string, error) {
-	return list_directory(assetsDir)
+	return list_directory(assetsDir())
 }
 
 func tags() ([]string, error) {
-	return list_directory(tagsDir)
+	return list_directory(tagsDir())
 }
 
 func assets_by_tag(tag string) ([]string, error) {
-	return list_directory(tagsDir + "/" + tag)
+	return list_directory(tagsDir() + "/" + tag)
 }
 
 func tags_by_asset(asset string) (tags []string) {
@@ -364,7 +375,7 @@ func tag(asset string, tags []string) error {
 		return err
 	}
 	for _, tag := range tags {
-		directory := tagsDir + "/" + tag
+		directory := tagsDir() + "/" + tag
 		_, err = os.Stat(directory)
 		/* Make the tag if it doesn't exist already */
 		if os.IsNotExist(err) {
@@ -406,7 +417,7 @@ func validate_assets() error {
 		return err
 	}
 	for _, asset := range assets {
-		hash, err = get_hash(assetsDir + "/" + asset)
+		hash, err = get_hash(assetsDir() + "/" + asset)
 		if err != nil {
 			return err
 		}
@@ -459,16 +470,16 @@ func info(asset string) (info_string string) {
 
 func init_folders() error {
 	var err error
-	if err = os.Mkdir(baseDir, 0755); err != nil {
+	if err = os.Mkdir(baseDir(), 0755); err != nil {
 		return err
 	}
-	if err = os.Mkdir(assetsDir, 0755); err != nil {
+	if err = os.Mkdir(assetsDir(), 0755); err != nil {
 		return err
 	}
-	if err = os.Mkdir(tagsDir, 0755); err != nil {
+	if err = os.Mkdir(tagsDir(), 0755); err != nil {
 		return err
 	}
-	if err = os.Mkdir(metadataDir, 0755); err != nil {
+	if err = os.Mkdir(metadataDir(), 0755); err != nil {
 		return err
 	}
 	return nil

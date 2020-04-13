@@ -7,7 +7,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
+	"syscall"
 	"text/template"
 
 	"gopkg.in/alexcesaro/statsd.v2"
@@ -176,12 +178,43 @@ func indexHTML() (output string, err error) {
 }
 
 func web(port string) {
+	var err error
+
+	/* Golang on Linux does not support setUid/setGid: https://github.com/golang/go/issues/1435 */
+	/* chroot() without setuid() can be escaped and is mostly useless.                          */
+	/* Non-Linux systems like FreeBSD are fine, however.                                        */
+	if isUser(Root) {
+		log.Print("We are root, using chroot() and setuid(65534) to sandbox decensor.")
+		dir := baseDir()
+		if err = syscall.Chroot(dir); err != nil {
+			log.Fatal("We are root but unable to chroot() to ", dir, ": ", err.Error())
+		}
+		if err = os.Chdir("/"); err != nil {
+			log.Fatal("Unable to chdir() to / after chroot().")
+		}
+		inChroot = true
+		// 65534 is the nobody user on most systems (BSD and Linux).
+		err = syscall.Setgid(Nobody)
+		if err == syscall.EOPNOTSUPP {
+			log.Print("setgid() not supported on Linux. Sandboxing ineffective: ", err.Error())
+		} else if err != nil {
+			log.Fatal(err.Error())
+		}
+		err = syscall.Setuid(Nobody)
+		if err == syscall.EOPNOTSUPP {
+			log.Print("setuid() not supported on Linux. Sandboxing ineffective: ", err.Error())
+		} else if err != nil {
+			log.Fatal(err.Error())
+		}
+	} else {
+		log.Print("We are not root, unable to chroot().")
+	}
+
 	/* Statsd statistics. This works fine with or without. */
 	s, err := statsd.New(statsd.Prefix("decensor"))
 	if err != nil {
-		log.Print("decensor connection to statsd failed. This is not a problem unless you want statsd.")
 		// This should be non-fatal.
-		log.Print(err)
+		log.Print("decensor connection to statsd failed (This is not a problem unless you want statsd): ", err.Error())
 	} else {
 		log.Print("decensor connected to statsd.")
 	}
