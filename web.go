@@ -189,7 +189,7 @@ func web(port string) {
 
 		/* Prime mime cache before we chroot and can no longer read /etc/mime.types or  */
 		/* /usr/local/etc/mime.types. Without this, if we chroot() we have a very limited */
-                /* subset of mime types to work with. We don't get .mp3 and .mp4, for example.    */
+		/* subset of mime types to work with. We don't get .mp3 and .mp4, for example.    */
 		mime.TypeByExtension("")
 
 		dir := baseDir()
