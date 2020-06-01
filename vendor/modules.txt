@@ -1,0 +1,2 @@
+# gopkg.in/alexcesaro/statsd.v2 v2.0.0
+gopkg.in/alexcesaro/statsd.v2
