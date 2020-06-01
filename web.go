@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"strings"
@@ -185,6 +186,12 @@ func web(port string) {
 	/* Non-Linux systems like FreeBSD are fine, however.                                        */
 	if isUser(Root) {
 		log.Print("We are root, using chroot() and setuid(65534) to sandbox decensor.")
+
+		/* Prime mime cache before we chroot and can no longer read /etc/mime.types or  */
+		/* /usr/local/etc/mime.types. Without this, if we chroot() we have a very limited */
+                /* subset of mime types to work with. We don't get .mp3 and .mp4, for example.    */
+		mime.TypeByExtension("")
+
 		dir := baseDir()
 		if err = syscall.Chroot(dir); err != nil {
 			log.Fatal("We are root but unable to chroot() to ", dir, ": ", err.Error())
