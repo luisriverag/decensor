@@ -10,13 +10,13 @@ WORKDIR /app
 COPY . .
 
 ## Run tests + build
-RUN apt-get update
-RUN apt-get install shellcheck
+#RUN apt-get update
+#RUN apt-get install shellcheck
 # Yes, this does both.
-RUN ./test.sh
+#RUN ./test.sh
 ##
 # Or, just build.
-# RUN go build
+RUN go build
 ##
 
 EXPOSE 4444
